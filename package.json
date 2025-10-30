@@ -30,6 +30,7 @@
     "vite": "^6.4.1"
   },
   "dependencies": {
+    "@jsforce/jsforce-node": "^3.10.8",
     "bits-ui": "^2.14.1",
     "clsx": "^2.1.1"
   }
