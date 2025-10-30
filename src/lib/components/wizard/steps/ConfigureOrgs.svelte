@@ -13,7 +13,6 @@
 		AlertCircle,
 		Loader2,
 		MoreVertical,
-		ArrowRight,
 		Info,
 		Building2,
 		Cloud,
@@ -32,6 +31,7 @@
 	} from '@lucide/svelte';
 	import type { SalesforceOrg } from '$lib/types/salesforce';
 	import type { Component } from 'svelte';
+	import duckforceArrow from '$lib/assets/duckforce-arrow.png';
 
 	// Preset Color Palette - Professional, muted tones with better contrast
 	const COLOR_PALETTE = [
@@ -584,9 +584,21 @@
 
 	<!-- Arrow Separator -->
 	<div class="hidden lg:flex items-center justify-center">
-		<div class="flex items-center justify-center w-12 h-12 rounded-full bg-muted text-muted-foreground">
-			<ArrowRight class="h-6 w-6" />
-		</div>
+		<Tooltip.Root>
+			<Tooltip.Trigger asChild>
+				{#snippet child({ props })}
+					<div {...props} class="flex items-center justify-center w-16 h-16 cursor-help">
+						<img src={duckforceArrow} alt="Data flow arrow" class="w-full h-full object-contain" />
+					</div>
+				{/snippet}
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<div class="text-center space-y-1">
+					<p class="font-semibold">Quack! 🦆</p>
+					<p class="text-xs">Source org (left) → Target org (right)</p>
+				</div>
+			</Tooltip.Content>
+		</Tooltip.Root>
 	</div>
 
 	<!-- Destination Organization -->

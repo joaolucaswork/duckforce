@@ -11,10 +11,10 @@ const outputDir = path.join(__dirname, '../static');
 
 const configuration = {
 	path: '/',
-	appName: 'SalesDuck',
-	appShortName: 'SalesDuck',
+	appName: 'Duckforce',
+	appShortName: 'Duckforce',
 	appDescription: 'Salesforce Migration Tracker',
-	developerName: 'SalesDuck Team',
+	developerName: 'Duckforce Team',
 	developerURL: null,
 	dir: 'auto',
 	lang: 'en-US',

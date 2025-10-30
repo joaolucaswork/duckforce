@@ -1,4 +1,4 @@
-# SalesDuck
+# Duckforce
 
 A modern SvelteKit application with shadcn-svelte components.
 

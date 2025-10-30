@@ -25,9 +25,9 @@
 </script>
 
 <div class={cn('flex items-center gap-3', className)}>
-	<img src="/salesduck.svg" alt="SalesDuck Logo" class={cn(sizeClasses[size], 'w-auto')} />
+	<img src="/salesduck.svg" alt="Duckforce Logo" class={cn(sizeClasses[size], 'w-auto')} />
 	{#if showText}
-		<span class={cn('font-bold tracking-tight', textSizeClasses[size])}>SalesDuck</span>
+		<span class={cn('font-bold tracking-tight', textSizeClasses[size])}>Duckforce</span>
 	{/if}
 </div>
 

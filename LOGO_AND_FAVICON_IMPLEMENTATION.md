@@ -1,15 +1,15 @@
-# SalesDuck Logo and Favicon Implementation
+# Duckforce Logo and Favicon Implementation
 
 ## Summary
 
-Successfully implemented the SalesDuck logo across the application and generated a complete favicon package for all platforms and browsers.
+Successfully implemented the Duckforce logo across the application and generated a complete favicon package for all platforms and browsers.
 
 ## What Was Done
 
 ### 1. Logo Component (`src/lib/components/Logo.svelte`)
 - Created a reusable Logo component with configurable size and text display
 - Supports sizes: `sm`, `md`, `lg`, `xl`
-- Can show/hide the "SalesDuck" text alongside the logo
+- Can show/hide the "Duckforce" text alongside the logo
 - Uses the existing design aesthetic with proper spacing
 
 ### 2. Logo Placement
@@ -59,7 +59,7 @@ Generated comprehensive favicon package using the `favicons` npm package:
 #### Web App Manifest
 - `manifest.webmanifest` with all icon references
 - Configured with app name, colors, and display settings
-- Theme color: `#03565B` (SalesDuck brand color)
+- Theme color: `#03565B` (Duckforce brand color)
 
 ### 4. HTML Head Updates (`src/app.html`)
 
