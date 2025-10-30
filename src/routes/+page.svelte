@@ -1,6 +1,7 @@
 <script lang="ts">
 	import * as Card from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
+	import { Button } from '$lib/components/ui/button';
 	import { Separator } from '$lib/components/ui/separator';
 	import * as Tabs from '$lib/components/ui/tabs';
 	import * as Dialog from '$lib/components/ui/dialog';
@@ -79,6 +80,9 @@
 					<p class="text-sm text-muted-foreground">Salesforce Migration Tracker</p>
 				</div>
 				<div class="flex items-center gap-4">
+					<Button href="/wizard">
+						New Migration
+					</Button>
 					<Badge variant="outline">{project.sourceOrg.name}</Badge>
 					<span class="text-muted-foreground">→</span>
 					<Badge variant="outline">{project.targetOrg.name}</Badge>
