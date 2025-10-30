@@ -113,6 +113,7 @@ export interface SalesforceOrg {
 	orgType: 'production' | 'sandbox' | 'developer' | 'scratch';
 	apiVersion: string;
 	color?: string; // Custom color for visual identification
+	icon?: string; // Lucide icon name for visual identification
 }
 
 // Dependency Graph

@@ -8,8 +8,30 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import * as Select from '$lib/components/ui/select';
 	import * as Tooltip from '$lib/components/ui/tooltip';
-	import { AlertCircle, Loader2, MoreVertical, ArrowRight, Info } from '@lucide/svelte';
+	import * as Tabs from '$lib/components/ui/tabs';
+	import {
+		AlertCircle,
+		Loader2,
+		MoreVertical,
+		ArrowRight,
+		Info,
+		Building2,
+		Cloud,
+		Database,
+		Rocket,
+		Zap,
+		Star,
+		Heart,
+		Briefcase,
+		Globe,
+		Shield,
+		Target,
+		TrendingUp,
+		ChevronRight,
+		ChevronLeft
+	} from '@lucide/svelte';
 	import type { SalesforceOrg } from '$lib/types/salesforce';
+	import type { Component } from 'svelte';
 
 	// Preset Color Palette - Professional, muted tones with better contrast
 	const COLOR_PALETTE = [
@@ -21,14 +43,35 @@
 		{ name: 'Cyan', value: '#0891b2' }       // Tailwind cyan-600 (darker)
 	];
 
+	// Curated icon palette for organizations
+	const ICON_PALETTE: Array<{ name: string; component: Component }> = [
+		{ name: 'building-2', component: Building2 },
+		{ name: 'cloud', component: Cloud },
+		{ name: 'database', component: Database },
+		{ name: 'rocket', component: Rocket },
+		{ name: 'zap', component: Zap },
+		{ name: 'star', component: Star },
+		{ name: 'heart', component: Heart },
+		{ name: 'briefcase', component: Briefcase },
+		{ name: 'globe', component: Globe },
+		{ name: 'shield', component: Shield },
+		{ name: 'target', component: Target },
+		{ name: 'trending-up', component: TrendingUp }
+	];
+
 	// Source Org State
 	let sourceOrgName = $state('');
 	let sourceInstanceUrl = $state('');
 	let sourceOrgType = $state<'production' | 'sandbox' | 'developer' | 'scratch'>('production');
 	let sourceApiVersion = $state('60.0');
 	let sourceColor = $state('#2563eb'); // Default blue-600
+	let sourceIcon = $state('building-2'); // Default icon
+	let sourceCustomizationTab = $state('color'); // 'color' or 'icon'
 	let sourceNameEditing = $state(false);
 	let sourceOrgNameManuallyEdited = $state(false); // Track if user manually edited the name
+	let sourceIconScrollContainer: HTMLDivElement | undefined = $state();
+	let sourceShowLeftArrow = $state(false);
+	let sourceShowRightArrow = $state(true);
 
 	// Target Org State
 	let targetOrgName = $state('');
@@ -36,8 +79,13 @@
 	let targetOrgType = $state<'production' | 'sandbox' | 'developer' | 'scratch'>('sandbox');
 	let targetApiVersion = $state('60.0');
 	let targetColor = $state('#059669'); // Default emerald-600
+	let targetIcon = $state('cloud'); // Default icon
+	let targetCustomizationTab = $state('color'); // 'color' or 'icon'
 	let targetNameEditing = $state(false);
 	let targetOrgNameManuallyEdited = $state(false); // Track if user manually edited the name
+	let targetIconScrollContainer: HTMLDivElement | undefined = $state();
+	let targetShowLeftArrow = $state(false);
+	let targetShowRightArrow = $state(true);
 
 	/**
 	 * Extract organization name from a Salesforce instance URL
@@ -104,6 +152,49 @@
 	const targetError = $derived(wizardStore.state.targetOrg.error);
 	const targetConnectedOrg = $derived(wizardStore.state.targetOrg.org);
 
+	// Helper function to get icon component by name
+	function getIconComponent(iconName?: string) {
+		if (!iconName) return Building2; // Default icon
+		const icon = ICON_PALETTE.find(i => i.name === iconName);
+		return icon?.component || Building2;
+	}
+
+	// Function to update arrow visibility based on scroll position
+	function updateSourceArrowVisibility() {
+		if (!sourceIconScrollContainer) return;
+		const { scrollLeft, scrollWidth, clientWidth } = sourceIconScrollContainer;
+		sourceShowLeftArrow = scrollLeft > 0;
+		sourceShowRightArrow = scrollLeft < scrollWidth - clientWidth - 1;
+	}
+
+	function updateTargetArrowVisibility() {
+		if (!targetIconScrollContainer) return;
+		const { scrollLeft, scrollWidth, clientWidth } = targetIconScrollContainer;
+		targetShowLeftArrow = scrollLeft > 0;
+		targetShowRightArrow = scrollLeft < scrollWidth - clientWidth - 1;
+	}
+
+	// Scroll functions
+	function scrollSourceLeft() {
+		sourceIconScrollContainer?.scrollBy({ left: -200, behavior: 'smooth' });
+		setTimeout(updateSourceArrowVisibility, 300);
+	}
+
+	function scrollSourceRight() {
+		sourceIconScrollContainer?.scrollBy({ left: 200, behavior: 'smooth' });
+		setTimeout(updateSourceArrowVisibility, 300);
+	}
+
+	function scrollTargetLeft() {
+		targetIconScrollContainer?.scrollBy({ left: -200, behavior: 'smooth' });
+		setTimeout(updateTargetArrowVisibility, 300);
+	}
+
+	function scrollTargetRight() {
+		targetIconScrollContainer?.scrollBy({ left: 200, behavior: 'smooth' });
+		setTimeout(updateTargetArrowVisibility, 300);
+	}
+
 	// Mock connection function for source org
 	async function handleConnectSource() {
 		if (!sourceInstanceUrl) {
@@ -126,7 +217,8 @@
 				instanceUrl: sourceInstanceUrl,
 				orgType: sourceOrgType,
 				apiVersion: sourceApiVersion,
-				color: sourceColor
+				color: sourceColor,
+				icon: sourceIcon
 			};
 
 			wizardStore.setSourceOrg(org, 'mock-access-token', sourceInstanceUrl);
@@ -161,7 +253,8 @@
 				instanceUrl: targetInstanceUrl,
 				orgType: targetOrgType,
 				apiVersion: targetApiVersion,
-				color: targetColor
+				color: targetColor,
+				icon: targetIcon
 			};
 
 			wizardStore.setTargetOrg(org, 'mock-access-token', targetInstanceUrl);
@@ -187,6 +280,8 @@
 		sourceOrgType = 'production';
 		sourceApiVersion = '60.0';
 		sourceColor = '#2563eb'; // Default blue-600
+		sourceIcon = 'building-2'; // Default icon
+		sourceCustomizationTab = 'color'; // Reset to color tab
 		sourceOrgNameManuallyEdited = false; // Reset manual edit flag
 	}
 
@@ -203,6 +298,8 @@
 		targetOrgType = 'sandbox';
 		targetApiVersion = '60.0';
 		targetColor = '#059669'; // Default emerald-600
+		targetIcon = 'cloud'; // Default icon
+		targetCustomizationTab = 'color'; // Reset to color tab
 		targetOrgNameManuallyEdited = false; // Reset manual edit flag
 	}
 </script>
@@ -279,36 +376,48 @@
 				<!-- Connected State -->
 				<div class="space-y-6">
 					<!-- Header Section with Org Info (integrated with card) -->
-					<div
-						class="-mx-6 -mt-6 rounded-t-xl px-6 py-5 flex items-start justify-between text-white"
-						style="background-color: {sourceColor};"
-					>
-						<div class="flex-1 space-y-1">
-							<!-- Org Name -->
-							<h2 class="text-xl font-semibold tracking-tight">
-								{sourceConnectedOrg.name}
-							</h2>
-							<!-- Org Type -->
-							<p class="text-sm opacity-90 capitalize">
-								{sourceConnectedOrg.orgType}
-							</p>
-						</div>
+					{#snippet sourceOrgHeader()}
+						{@const SourceIconComponent = getIconComponent(sourceConnectedOrg.icon)}
+						<div
+							class="-mx-6 -mt-6 rounded-t-xl px-6 py-5 flex items-start justify-between text-white"
+							style="background-color: {sourceColor};"
+						>
+							<div class="flex-1 flex items-start gap-3">
+								<!-- Org Icon -->
+								<div class="flex-shrink-0 mt-0.5">
+									<SourceIconComponent class="h-6 w-6 opacity-90" />
+								</div>
 
-						<!-- Info Icon with Tooltip -->
-						<Tooltip.Root>
-							<Tooltip.Trigger>
-								<div class="p-1.5 hover:bg-white/10 rounded-md transition-colors">
-									<Info class="h-4 w-4 opacity-90" />
+								<div class="flex-1 space-y-1">
+									<!-- Org Name -->
+									<h2 class="text-xl font-semibold tracking-tight">
+										{sourceConnectedOrg.name}
+									</h2>
+									<!-- Org Type -->
+									<p class="text-sm opacity-90 capitalize">
+										{sourceConnectedOrg.orgType}
+									</p>
 								</div>
-							</Tooltip.Trigger>
-							<Tooltip.Content side="left" class="max-w-xs">
-								<div class="space-y-2 text-xs">
-									<div><strong>Instance URL:</strong><br/>{sourceConnectedOrg.instanceUrl}</div>
-									<div><strong>API Version:</strong> {sourceConnectedOrg.apiVersion}</div>
-								</div>
-							</Tooltip.Content>
-						</Tooltip.Root>
-					</div>
+							</div>
+
+							<!-- Info Icon with Tooltip -->
+							<Tooltip.Root>
+								<Tooltip.Trigger>
+									<div class="p-1.5 hover:bg-white/10 rounded-md transition-colors">
+										<Info class="h-4 w-4 opacity-90" />
+									</div>
+								</Tooltip.Trigger>
+								<Tooltip.Content side="left" class="max-w-xs">
+									<div class="space-y-2 text-xs">
+										<div><strong>Instance URL:</strong><br/>{sourceConnectedOrg.instanceUrl}</div>
+										<div><strong>API Version:</strong> {sourceConnectedOrg.apiVersion}</div>
+									</div>
+								</Tooltip.Content>
+							</Tooltip.Root>
+						</div>
+					{/snippet}
+
+					{@render sourceOrgHeader()}
 
 					<!-- Action Buttons -->
 					<div class="flex gap-3">
@@ -355,24 +464,83 @@
 						</Select.Root>
 					</div>
 
+					<!-- Customization Tabs -->
 					<div class="space-y-3">
-						<Label>Organization Color</Label>
-						<div class="flex gap-2">
-							{#each COLOR_PALETTE as color}
-								<button
-									type="button"
-									onclick={() => sourceColor = color.value}
-									disabled={sourceIsConnecting}
-									class="w-10 h-10 rounded-lg border-2 transition-all hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed"
-									class:border-foreground={sourceColor === color.value}
-									class:border-transparent={sourceColor !== color.value}
-									style="background-color: {color.value};"
-									title={color.name}
-								>
-									<span class="sr-only">{color.name}</span>
-								</button>
-							{/each}
-						</div>
+						<Label class="sr-only">Organization Appearance</Label>
+						<Tabs.Root bind:value={sourceCustomizationTab}>
+							<Tabs.List class="grid w-full grid-cols-2">
+								<Tabs.Trigger value="color">Color</Tabs.Trigger>
+								<Tabs.Trigger value="icon">Icon</Tabs.Trigger>
+							</Tabs.List>
+
+							<div class="mt-4 w-fit">
+								<Tabs.Content value="color">
+									<div class="flex gap-2">
+										{#each COLOR_PALETTE as color}
+											<button
+												type="button"
+												onclick={() => sourceColor = color.value}
+												disabled={sourceIsConnecting}
+												class="w-12 h-12 rounded-md border-2 transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+												class:border-foreground={sourceColor === color.value}
+												class:border-transparent={sourceColor !== color.value}
+												style="background-color: {color.value};"
+												title={color.name}
+											>
+												<span class="sr-only">{color.name}</span>
+											</button>
+										{/each}
+									</div>
+								</Tabs.Content>
+
+								<Tabs.Content value="icon">
+									<div class="relative w-fit">
+										<div
+											class="flex gap-2 overflow-x-auto scrollbar-hide scroll-smooth max-w-[320px]"
+											bind:this={sourceIconScrollContainer}
+											onscroll={updateSourceArrowVisibility}
+										>
+											{#each ICON_PALETTE as icon}
+												{@const IconComponent = icon.component}
+												<button
+													type="button"
+													onclick={() => sourceIcon = icon.name}
+													disabled={sourceIsConnecting}
+													class="w-12 h-12 rounded-lg border-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center flex-shrink-0"
+													class:border-foreground={sourceIcon === icon.name}
+													class:border-transparent={sourceIcon !== icon.name}
+													class:bg-muted={sourceIcon === icon.name}
+													title={icon.name}
+												>
+													<IconComponent class="h-5 w-5" />
+													<span class="sr-only">{icon.name}</span>
+												</button>
+											{/each}
+										</div>
+										{#if sourceShowLeftArrow}
+											<button
+												type="button"
+												onclick={scrollSourceLeft}
+												class="absolute left-0 top-1/2 -translate-y-1/2 bg-background/80 backdrop-blur-sm border rounded-full p-1 hover:bg-muted transition-colors"
+												title="Scroll left"
+											>
+												<ChevronLeft class="h-4 w-4" />
+											</button>
+										{/if}
+										{#if sourceShowRightArrow}
+											<button
+												type="button"
+												onclick={scrollSourceRight}
+												class="absolute right-0 top-1/2 -translate-y-1/2 bg-background/80 backdrop-blur-sm border rounded-full p-1 hover:bg-muted transition-colors"
+												title="Scroll right"
+											>
+												<ChevronRight class="h-4 w-4" />
+											</button>
+										{/if}
+									</div>
+								</Tabs.Content>
+							</div>
+						</Tabs.Root>
 					</div>
 
 					{#if sourceError}
@@ -478,36 +646,48 @@
 				<!-- Connected State -->
 				<div class="space-y-6">
 					<!-- Header Section with Org Info (integrated with card) -->
-					<div
-						class="-mx-6 -mt-6 rounded-t-xl px-6 py-5 flex items-start justify-between text-white"
-						style="background-color: {targetColor};"
-					>
-						<div class="flex-1 space-y-1">
-							<!-- Org Name -->
-							<h2 class="text-xl font-semibold tracking-tight">
-								{targetConnectedOrg.name}
-							</h2>
-							<!-- Org Type -->
-							<p class="text-sm opacity-90 capitalize">
-								{targetConnectedOrg.orgType}
-							</p>
-						</div>
+					{#snippet targetOrgHeader()}
+						{@const TargetIconComponent = getIconComponent(targetConnectedOrg.icon)}
+						<div
+							class="-mx-6 -mt-6 rounded-t-xl px-6 py-5 flex items-start justify-between text-white"
+							style="background-color: {targetColor};"
+						>
+							<div class="flex-1 flex items-start gap-3">
+								<!-- Org Icon -->
+								<div class="flex-shrink-0 mt-0.5">
+									<TargetIconComponent class="h-6 w-6 opacity-90" />
+								</div>
 
-						<!-- Info Icon with Tooltip -->
-						<Tooltip.Root>
-							<Tooltip.Trigger>
-								<div class="p-1.5 hover:bg-white/10 rounded-md transition-colors">
-									<Info class="h-4 w-4 opacity-90" />
+								<div class="flex-1 space-y-1">
+									<!-- Org Name -->
+									<h2 class="text-xl font-semibold tracking-tight">
+										{targetConnectedOrg.name}
+									</h2>
+									<!-- Org Type -->
+									<p class="text-sm opacity-90 capitalize">
+										{targetConnectedOrg.orgType}
+									</p>
 								</div>
-							</Tooltip.Trigger>
-							<Tooltip.Content side="left" class="max-w-xs">
-								<div class="space-y-2 text-xs">
-									<div><strong>Instance URL:</strong><br/>{targetConnectedOrg.instanceUrl}</div>
-									<div><strong>API Version:</strong> {targetConnectedOrg.apiVersion}</div>
-								</div>
-							</Tooltip.Content>
-						</Tooltip.Root>
-					</div>
+							</div>
+
+							<!-- Info Icon with Tooltip -->
+							<Tooltip.Root>
+								<Tooltip.Trigger>
+									<div class="p-1.5 hover:bg-white/10 rounded-md transition-colors">
+										<Info class="h-4 w-4 opacity-90" />
+									</div>
+								</Tooltip.Trigger>
+								<Tooltip.Content side="left" class="max-w-xs">
+									<div class="space-y-2 text-xs">
+										<div><strong>Instance URL:</strong><br/>{targetConnectedOrg.instanceUrl}</div>
+										<div><strong>API Version:</strong> {targetConnectedOrg.apiVersion}</div>
+									</div>
+								</Tooltip.Content>
+							</Tooltip.Root>
+						</div>
+					{/snippet}
+
+					{@render targetOrgHeader()}
 
 					<!-- Action Buttons -->
 					<div class="flex gap-3">
@@ -554,24 +734,83 @@
 						</Select.Root>
 					</div>
 
+					<!-- Customization Tabs -->
 					<div class="space-y-3">
-						<Label>Organization Color</Label>
-						<div class="flex gap-2">
-							{#each COLOR_PALETTE as color}
-								<button
-									type="button"
-									onclick={() => targetColor = color.value}
-									disabled={targetIsConnecting}
-									class="w-10 h-10 rounded-lg border-2 transition-all hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed"
-									class:border-foreground={targetColor === color.value}
-									class:border-transparent={targetColor !== color.value}
-									style="background-color: {color.value};"
-									title={color.name}
-								>
-									<span class="sr-only">{color.name}</span>
-								</button>
-							{/each}
-						</div>
+						<Label class="sr-only">Organization Appearance</Label>
+						<Tabs.Root bind:value={targetCustomizationTab}>
+							<Tabs.List class="grid w-full grid-cols-2">
+								<Tabs.Trigger value="color">Color</Tabs.Trigger>
+								<Tabs.Trigger value="icon">Icon</Tabs.Trigger>
+							</Tabs.List>
+
+							<div class="mt-4 w-fit">
+								<Tabs.Content value="color">
+									<div class="flex gap-2">
+										{#each COLOR_PALETTE as color}
+											<button
+												type="button"
+												onclick={() => targetColor = color.value}
+												disabled={targetIsConnecting}
+												class="w-12 h-12 rounded-md border-2 transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+												class:border-foreground={targetColor === color.value}
+												class:border-transparent={targetColor !== color.value}
+												style="background-color: {color.value};"
+												title={color.name}
+											>
+												<span class="sr-only">{color.name}</span>
+											</button>
+										{/each}
+									</div>
+								</Tabs.Content>
+
+								<Tabs.Content value="icon">
+									<div class="relative w-fit">
+										<div
+											class="flex gap-2 overflow-x-auto scrollbar-hide scroll-smooth max-w-[320px]"
+											bind:this={targetIconScrollContainer}
+											onscroll={updateTargetArrowVisibility}
+										>
+											{#each ICON_PALETTE as icon}
+												{@const IconComponent = icon.component}
+												<button
+													type="button"
+													onclick={() => targetIcon = icon.name}
+													disabled={targetIsConnecting}
+													class="w-12 h-12 rounded-lg border-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center flex-shrink-0"
+													class:border-foreground={targetIcon === icon.name}
+													class:border-transparent={targetIcon !== icon.name}
+													class:bg-muted={targetIcon === icon.name}
+													title={icon.name}
+												>
+													<IconComponent class="h-5 w-5" />
+													<span class="sr-only">{icon.name}</span>
+												</button>
+											{/each}
+										</div>
+										{#if targetShowLeftArrow}
+											<button
+												type="button"
+												onclick={scrollTargetLeft}
+												class="absolute left-0 top-1/2 -translate-y-1/2 bg-background/80 backdrop-blur-sm border rounded-full p-1 hover:bg-muted transition-colors"
+												title="Scroll left"
+											>
+												<ChevronLeft class="h-4 w-4" />
+											</button>
+										{/if}
+										{#if targetShowRightArrow}
+											<button
+												type="button"
+												onclick={scrollTargetRight}
+												class="absolute right-0 top-1/2 -translate-y-1/2 bg-background/80 backdrop-blur-sm border rounded-full p-1 hover:bg-muted transition-colors"
+												title="Scroll right"
+											>
+												<ChevronRight class="h-4 w-4" />
+											</button>
+										{/if}
+									</div>
+								</Tabs.Content>
+							</div>
+						</Tabs.Root>
 					</div>
 
 					{#if targetError}

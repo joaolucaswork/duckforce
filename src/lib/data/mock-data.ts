@@ -240,14 +240,18 @@ export const mockProject: MigrationProject = {
 		name: 'Production Org',
 		instanceUrl: 'https://mycompany.my.salesforce.com',
 		orgType: 'production',
-		apiVersion: '60.0'
+		apiVersion: '60.0',
+		color: '#2563eb',
+		icon: 'building-2'
 	},
 	targetOrg: {
 		id: 'org-sandbox',
 		name: 'UAT Sandbox',
 		instanceUrl: 'https://mycompany--uat.sandbox.my.salesforce.com',
 		orgType: 'sandbox',
-		apiVersion: '60.0'
+		apiVersion: '60.0',
+		color: '#059669',
+		icon: 'cloud'
 	},
 	components: mockComponents,
 	createdDate: new Date('2025-01-10'),
