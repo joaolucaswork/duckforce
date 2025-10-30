@@ -7,7 +7,7 @@
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import * as Tabs from '$lib/components/ui/tabs';
 	import * as Alert from '$lib/components/ui/alert';
-	import { Search, Loader2, Info } from '@lucide/svelte';
+	import { Search, LoaderCircle, Info } from '@lucide/svelte';
 	import type { ComponentType } from '$lib/types/salesforce';
 	import { onMount } from 'svelte';
 
@@ -110,7 +110,7 @@
 		<!-- Loading State -->
 		<div class="flex items-center justify-center py-12">
 			<div class="text-center space-y-4">
-				<Loader2 class="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
+				<LoaderCircle class="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
 				<p class="text-sm text-muted-foreground">Loading components from source org...</p>
 			</div>
 		</div>
