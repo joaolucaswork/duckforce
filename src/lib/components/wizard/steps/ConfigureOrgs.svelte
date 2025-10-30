@@ -4,19 +4,29 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import * as Alert from '$lib/components/ui/alert';
-	import { Badge } from '$lib/components/ui/badge';
 	import * as Card from '$lib/components/ui/card';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import * as Select from '$lib/components/ui/select';
-	import { CheckCircle2, AlertCircle, Loader2, MoreVertical, ArrowRight } from '@lucide/svelte';
+	import * as Tooltip from '$lib/components/ui/tooltip';
+	import { AlertCircle, Loader2, MoreVertical, ArrowRight, Info } from '@lucide/svelte';
 	import type { SalesforceOrg } from '$lib/types/salesforce';
+
+	// Preset Color Palette - Professional, muted tones with better contrast
+	const COLOR_PALETTE = [
+		{ name: 'Blue', value: '#2563eb' },      // Tailwind blue-600 (darker)
+		{ name: 'Emerald', value: '#059669' },   // Tailwind emerald-600 (darker)
+		{ name: 'Violet', value: '#7c3aed' },    // Tailwind violet-600 (darker)
+		{ name: 'Amber', value: '#d97706' },     // Tailwind amber-600 (darker)
+		{ name: 'Rose', value: '#e11d48' },      // Tailwind rose-600 (darker)
+		{ name: 'Cyan', value: '#0891b2' }       // Tailwind cyan-600 (darker)
+	];
 
 	// Source Org State
 	let sourceOrgName = $state('');
 	let sourceInstanceUrl = $state('');
 	let sourceOrgType = $state<'production' | 'sandbox' | 'developer' | 'scratch'>('production');
 	let sourceApiVersion = $state('60.0');
-	let sourceColor = $state('#3b82f6'); // Default blue
+	let sourceColor = $state('#2563eb'); // Default blue-600
 	let sourceNameEditing = $state(false);
 	let sourceOrgNameManuallyEdited = $state(false); // Track if user manually edited the name
 
@@ -25,7 +35,7 @@
 	let targetInstanceUrl = $state('');
 	let targetOrgType = $state<'production' | 'sandbox' | 'developer' | 'scratch'>('sandbox');
 	let targetApiVersion = $state('60.0');
-	let targetColor = $state('#10b981'); // Default green
+	let targetColor = $state('#059669'); // Default emerald-600
 	let targetNameEditing = $state(false);
 	let targetOrgNameManuallyEdited = $state(false); // Track if user manually edited the name
 
@@ -176,7 +186,7 @@
 		sourceInstanceUrl = '';
 		sourceOrgType = 'production';
 		sourceApiVersion = '60.0';
-		sourceColor = '#3b82f6'; // Default blue
+		sourceColor = '#2563eb'; // Default blue-600
 		sourceOrgNameManuallyEdited = false; // Reset manual edit flag
 	}
 
@@ -192,7 +202,7 @@
 		targetInstanceUrl = '';
 		targetOrgType = 'sandbox';
 		targetApiVersion = '60.0';
-		targetColor = '#10b981'; // Default green
+		targetColor = '#059669'; // Default emerald-600
 		targetOrgNameManuallyEdited = false; // Reset manual edit flag
 	}
 </script>
@@ -200,115 +210,120 @@
 <div class="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] gap-6 items-center">
 	<!-- Source Organization -->
 	<Card.Root class="shadow-none">
-		<Card.Header>
-			<div class="flex items-center justify-between">
-				<div class="flex-1">
-					{#if sourceIsConnected && sourceConnectedOrg}
-						<Card.Title>{sourceConnectedOrg.name}</Card.Title>
-						<Card.Description>Source</Card.Description>
-					{:else if sourceOrgName}
-						{#if sourceNameEditing}
-							<Input
-								bind:value={sourceOrgName}
-								placeholder="Enter organization name"
-								class="text-lg font-semibold h-auto px-0 border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
-								oninput={() => {
-									// Mark as manually edited when user types
-									sourceOrgNameManuallyEdited = true;
-								}}
-								onkeydown={(e) => {
-									if (e.key === 'Enter') {
-										sourceNameEditing = false;
-									}
-								}}
-								onblur={() => sourceNameEditing = false}
-								autofocus
-							/>
+		{#if !sourceIsConnected}
+			<Card.Header>
+				<div class="flex items-center justify-between">
+					<div class="flex-1">
+						{#if sourceOrgName}
+							{#if sourceNameEditing}
+								<Input
+									bind:value={sourceOrgName}
+									placeholder="Enter organization name"
+									class="text-lg font-semibold h-auto px-0 border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+									oninput={() => {
+										// Mark as manually edited when user types
+										sourceOrgNameManuallyEdited = true;
+									}}
+									onkeydown={(e) => {
+										if (e.key === 'Enter') {
+											sourceNameEditing = false;
+										}
+									}}
+									onblur={() => sourceNameEditing = false}
+									autofocus
+								/>
+							{:else}
+								<button
+									onclick={() => sourceNameEditing = true}
+									class="text-lg font-semibold text-left hover:text-muted-foreground transition-colors"
+								>
+									{sourceOrgName}
+								</button>
+								<Card.Description>Source</Card.Description>
+							{/if}
 						{:else}
-							<button
-								onclick={() => sourceNameEditing = true}
-								class="text-lg font-semibold text-left hover:text-muted-foreground transition-colors"
-							>
-								{sourceOrgName}
-							</button>
 							<Card.Description>Source</Card.Description>
 						{/if}
-					{:else}
-						<Card.Description>Source</Card.Description>
-					{/if}
-				</div>
-				<DropdownMenu.Root>
-					<DropdownMenu.Trigger>
-						{#snippet child({ props })}
-							<Button {...props} variant="ghost" size="icon" class="h-8 w-8">
-								<MoreVertical class="h-4 w-4" />
-								<span class="sr-only">Open menu</span>
-							</Button>
-						{/snippet}
-					</DropdownMenu.Trigger>
-					<DropdownMenu.Content align="end" class="w-56">
-						<DropdownMenu.Label>Advanced Options</DropdownMenu.Label>
-						<DropdownMenu.Separator />
+					</div>
+					<DropdownMenu.Root>
+						<DropdownMenu.Trigger>
+							{#snippet child({ props })}
+								<Button {...props} variant="ghost" size="icon" class="h-8 w-8">
+									<MoreVertical class="h-4 w-4" />
+									<span class="sr-only">Open menu</span>
+								</Button>
+							{/snippet}
+						</DropdownMenu.Trigger>
+						<DropdownMenu.Content align="end" class="w-56">
+							<DropdownMenu.Label>Advanced Options</DropdownMenu.Label>
+							<DropdownMenu.Separator />
 
-						<!-- API Version -->
-						<div class="px-2 py-2">
-							<Label for="source-api-version-menu" class="text-xs text-muted-foreground">API Version</Label>
-							<Input
-								id="source-api-version-menu"
-								bind:value={sourceApiVersion}
-								placeholder="60.0"
-								disabled={sourceIsConnecting}
-								class="mt-1.5 h-8"
-							/>
-						</div>
-					</DropdownMenu.Content>
-				</DropdownMenu.Root>
-			</div>
-		</Card.Header>
+							<!-- API Version -->
+							<div class="px-2 py-2">
+								<Label for="source-api-version-menu" class="text-xs text-muted-foreground">API Version</Label>
+								<Input
+									id="source-api-version-menu"
+									bind:value={sourceApiVersion}
+									placeholder="60.0"
+									disabled={sourceIsConnecting}
+									class="mt-1.5 h-8"
+								/>
+							</div>
+						</DropdownMenu.Content>
+					</DropdownMenu.Root>
+				</div>
+			</Card.Header>
+		{/if}
 		<Card.Content>
 			{#if sourceIsConnected && sourceConnectedOrg}
 				<!-- Connected State -->
-				<Alert.Root class="border-green-200 bg-green-50 mb-4">
-					<CheckCircle2 class="h-4 w-4 text-green-600" />
-					<Alert.Title class="text-green-900">Connected Successfully</Alert.Title>
-					<Alert.Description class="text-green-800">
-						You are connected to <strong>{sourceConnectedOrg.name}</strong>
-					</Alert.Description>
-				</Alert.Root>
+				<div class="space-y-6">
+					<!-- Header Section with Org Info (integrated with card) -->
+					<div
+						class="-mx-6 -mt-6 rounded-t-xl px-6 py-5 flex items-start justify-between text-white"
+						style="background-color: {sourceColor};"
+					>
+						<div class="flex-1 space-y-1">
+							<!-- Org Name -->
+							<h2 class="text-xl font-semibold tracking-tight">
+								{sourceConnectedOrg.name}
+							</h2>
+							<!-- Org Type -->
+							<p class="text-sm opacity-90 capitalize">
+								{sourceConnectedOrg.orgType}
+							</p>
+						</div>
 
-				<div class="rounded-lg border p-4 space-y-3">
-					<div class="flex items-center justify-between">
-						<h3 class="font-semibold">Source Org Details</h3>
-						<Badge variant="outline">{sourceConnectedOrg.orgType}</Badge>
+						<!-- Info Icon with Tooltip -->
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<div class="p-1.5 hover:bg-white/10 rounded-md transition-colors">
+									<Info class="h-4 w-4 opacity-90" />
+								</div>
+							</Tooltip.Trigger>
+							<Tooltip.Content side="left" class="max-w-xs">
+								<div class="space-y-2 text-xs">
+									<div><strong>Instance URL:</strong><br/>{sourceConnectedOrg.instanceUrl}</div>
+									<div><strong>API Version:</strong> {sourceConnectedOrg.apiVersion}</div>
+								</div>
+							</Tooltip.Content>
+						</Tooltip.Root>
 					</div>
-					<div class="grid grid-cols-2 gap-4 text-sm">
-						<div>
-							<p class="text-muted-foreground">Org Name</p>
-							<p class="font-medium">{sourceConnectedOrg.name}</p>
-						</div>
-						<div>
-							<p class="text-muted-foreground">Instance URL</p>
-							<p class="font-medium truncate">{sourceConnectedOrg.instanceUrl}</p>
-						</div>
-						<div>
-							<p class="text-muted-foreground">Org Type</p>
-							<p class="font-medium capitalize">{sourceConnectedOrg.orgType}</p>
-						</div>
-						<div>
-							<p class="text-muted-foreground">API Version</p>
-							<p class="font-medium">{sourceConnectedOrg.apiVersion}</p>
-						</div>
-					</div>
-					<div class="pt-2">
-						<Button variant="outline" size="sm" onclick={handleDisconnectSource}>
+
+					<!-- Action Buttons -->
+					<div class="flex gap-3">
+						<Button variant="secondary" class="flex-1">
+							View Details
+						</Button>
+						<Button variant="outline" onclick={handleDisconnectSource}>
 							Disconnect
 						</Button>
 					</div>
 				</div>
 			{:else}
 				<!-- Connection Form -->
-				<div class="space-y-4">
-					<div class="space-y-2">
+				<div class="space-y-6">
+					<div class="space-y-3">
 						<Label for="source-instance-url">Instance URL *</Label>
 						<Input
 							id="source-instance-url"
@@ -318,7 +333,7 @@
 						/>
 					</div>
 
-					<div class="space-y-2">
+					<div class="space-y-3">
 						<Label for="source-org-type">Organization Type</Label>
 						<Select.Root
 							type="single"
@@ -340,20 +355,24 @@
 						</Select.Root>
 					</div>
 
-					<div class="space-y-2">
-						<Label for="source-color">Organization Color</Label>
-						<input
-							id="source-color"
-							type="color"
-							value={sourceColor || '#3b82f6'}
-							oninput={(e) => {
-								const target = e.target as HTMLInputElement;
-								sourceColor = target.value;
-							}}
-							disabled={sourceIsConnecting}
-							class="w-8 h-8 rounded-full cursor-pointer border-0 p-0 overflow-hidden"
-							style="appearance: none; -webkit-appearance: none; -moz-appearance: none;"
-						/>
+					<div class="space-y-3">
+						<Label>Organization Color</Label>
+						<div class="flex gap-2">
+							{#each COLOR_PALETTE as color}
+								<button
+									type="button"
+									onclick={() => sourceColor = color.value}
+									disabled={sourceIsConnecting}
+									class="w-10 h-10 rounded-lg border-2 transition-all hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed"
+									class:border-foreground={sourceColor === color.value}
+									class:border-transparent={sourceColor !== color.value}
+									style="background-color: {color.value};"
+									title={color.name}
+								>
+									<span class="sr-only">{color.name}</span>
+								</button>
+							{/each}
+						</div>
 					</div>
 
 					{#if sourceError}
@@ -390,115 +409,120 @@
 
 	<!-- Destination Organization -->
 	<Card.Root class="shadow-none">
-		<Card.Header>
-			<div class="flex items-center justify-between">
-				<div class="flex-1">
-					{#if targetIsConnected && targetConnectedOrg}
-						<Card.Title>{targetConnectedOrg.name}</Card.Title>
-						<Card.Description>Destination</Card.Description>
-					{:else if targetOrgName}
-						{#if targetNameEditing}
-							<Input
-								bind:value={targetOrgName}
-								placeholder="Enter organization name"
-								class="text-lg font-semibold h-auto px-0 border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
-								oninput={() => {
-									// Mark as manually edited when user types
-									targetOrgNameManuallyEdited = true;
-								}}
-								onkeydown={(e) => {
-									if (e.key === 'Enter') {
-										targetNameEditing = false;
-									}
-								}}
-								onblur={() => targetNameEditing = false}
-								autofocus
-							/>
+		{#if !targetIsConnected}
+			<Card.Header>
+				<div class="flex items-center justify-between">
+					<div class="flex-1">
+						{#if targetOrgName}
+							{#if targetNameEditing}
+								<Input
+									bind:value={targetOrgName}
+									placeholder="Enter organization name"
+									class="text-lg font-semibold h-auto px-0 border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+									oninput={() => {
+										// Mark as manually edited when user types
+										targetOrgNameManuallyEdited = true;
+									}}
+									onkeydown={(e) => {
+										if (e.key === 'Enter') {
+											targetNameEditing = false;
+										}
+									}}
+									onblur={() => targetNameEditing = false}
+									autofocus
+								/>
+							{:else}
+								<button
+									onclick={() => targetNameEditing = true}
+									class="text-lg font-semibold text-left hover:text-muted-foreground transition-colors"
+								>
+									{targetOrgName}
+								</button>
+								<Card.Description>Destination</Card.Description>
+							{/if}
 						{:else}
-							<button
-								onclick={() => targetNameEditing = true}
-								class="text-lg font-semibold text-left hover:text-muted-foreground transition-colors"
-							>
-								{targetOrgName}
-							</button>
 							<Card.Description>Destination</Card.Description>
 						{/if}
-					{:else}
-						<Card.Description>Destination</Card.Description>
-					{/if}
-				</div>
-				<DropdownMenu.Root>
-					<DropdownMenu.Trigger>
-						{#snippet child({ props })}
-							<Button {...props} variant="ghost" size="icon" class="h-8 w-8">
-								<MoreVertical class="h-4 w-4" />
-								<span class="sr-only">Open menu</span>
-							</Button>
-						{/snippet}
-					</DropdownMenu.Trigger>
-					<DropdownMenu.Content align="end" class="w-56">
-						<DropdownMenu.Label>Advanced Options</DropdownMenu.Label>
-						<DropdownMenu.Separator />
+					</div>
+					<DropdownMenu.Root>
+						<DropdownMenu.Trigger>
+							{#snippet child({ props })}
+								<Button {...props} variant="ghost" size="icon" class="h-8 w-8">
+									<MoreVertical class="h-4 w-4" />
+									<span class="sr-only">Open menu</span>
+								</Button>
+							{/snippet}
+						</DropdownMenu.Trigger>
+						<DropdownMenu.Content align="end" class="w-56">
+							<DropdownMenu.Label>Advanced Options</DropdownMenu.Label>
+							<DropdownMenu.Separator />
 
-						<!-- API Version -->
-						<div class="px-2 py-2">
-							<Label for="target-api-version-menu" class="text-xs text-muted-foreground">API Version</Label>
-							<Input
-								id="target-api-version-menu"
-								bind:value={targetApiVersion}
-								placeholder="60.0"
-								disabled={targetIsConnecting}
-								class="mt-1.5 h-8"
-							/>
-						</div>
-					</DropdownMenu.Content>
-				</DropdownMenu.Root>
-			</div>
-		</Card.Header>
+							<!-- API Version -->
+							<div class="px-2 py-2">
+								<Label for="target-api-version-menu" class="text-xs text-muted-foreground">API Version</Label>
+								<Input
+									id="target-api-version-menu"
+									bind:value={targetApiVersion}
+									placeholder="60.0"
+									disabled={targetIsConnecting}
+									class="mt-1.5 h-8"
+								/>
+							</div>
+						</DropdownMenu.Content>
+					</DropdownMenu.Root>
+				</div>
+			</Card.Header>
+		{/if}
 		<Card.Content>
 			{#if targetIsConnected && targetConnectedOrg}
 				<!-- Connected State -->
-				<Alert.Root class="border-green-200 bg-green-50 mb-4">
-					<CheckCircle2 class="h-4 w-4 text-green-600" />
-					<Alert.Title class="text-green-900">Connected Successfully</Alert.Title>
-					<Alert.Description class="text-green-800">
-						You are connected to <strong>{targetConnectedOrg.name}</strong>
-					</Alert.Description>
-				</Alert.Root>
+				<div class="space-y-6">
+					<!-- Header Section with Org Info (integrated with card) -->
+					<div
+						class="-mx-6 -mt-6 rounded-t-xl px-6 py-5 flex items-start justify-between text-white"
+						style="background-color: {targetColor};"
+					>
+						<div class="flex-1 space-y-1">
+							<!-- Org Name -->
+							<h2 class="text-xl font-semibold tracking-tight">
+								{targetConnectedOrg.name}
+							</h2>
+							<!-- Org Type -->
+							<p class="text-sm opacity-90 capitalize">
+								{targetConnectedOrg.orgType}
+							</p>
+						</div>
 
-				<div class="rounded-lg border p-4 space-y-3">
-					<div class="flex items-center justify-between">
-						<h3 class="font-semibold">Destination Org Details</h3>
-						<Badge variant="outline">{targetConnectedOrg.orgType}</Badge>
+						<!-- Info Icon with Tooltip -->
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<div class="p-1.5 hover:bg-white/10 rounded-md transition-colors">
+									<Info class="h-4 w-4 opacity-90" />
+								</div>
+							</Tooltip.Trigger>
+							<Tooltip.Content side="left" class="max-w-xs">
+								<div class="space-y-2 text-xs">
+									<div><strong>Instance URL:</strong><br/>{targetConnectedOrg.instanceUrl}</div>
+									<div><strong>API Version:</strong> {targetConnectedOrg.apiVersion}</div>
+								</div>
+							</Tooltip.Content>
+						</Tooltip.Root>
 					</div>
-					<div class="grid grid-cols-2 gap-4 text-sm">
-						<div>
-							<p class="text-muted-foreground">Org Name</p>
-							<p class="font-medium">{targetConnectedOrg.name}</p>
-						</div>
-						<div>
-							<p class="text-muted-foreground">Instance URL</p>
-							<p class="font-medium truncate">{targetConnectedOrg.instanceUrl}</p>
-						</div>
-						<div>
-							<p class="text-muted-foreground">Org Type</p>
-							<p class="font-medium capitalize">{targetConnectedOrg.orgType}</p>
-						</div>
-						<div>
-							<p class="text-muted-foreground">API Version</p>
-							<p class="font-medium">{targetConnectedOrg.apiVersion}</p>
-						</div>
-					</div>
-					<div class="pt-2">
-						<Button variant="outline" size="sm" onclick={handleDisconnectTarget}>
+
+					<!-- Action Buttons -->
+					<div class="flex gap-3">
+						<Button variant="secondary" class="flex-1">
+							View Details
+						</Button>
+						<Button variant="outline" onclick={handleDisconnectTarget}>
 							Disconnect
 						</Button>
 					</div>
 				</div>
 			{:else}
 				<!-- Connection Form -->
-				<div class="space-y-4">
-					<div class="space-y-2">
+				<div class="space-y-6">
+					<div class="space-y-3">
 						<Label for="target-instance-url">Instance URL *</Label>
 						<Input
 							id="target-instance-url"
@@ -508,7 +532,7 @@
 						/>
 					</div>
 
-					<div class="space-y-2">
+					<div class="space-y-3">
 						<Label for="target-org-type">Organization Type</Label>
 						<Select.Root
 							type="single"
@@ -530,20 +554,24 @@
 						</Select.Root>
 					</div>
 
-					<div class="space-y-2">
-						<Label for="target-color">Organization Color</Label>
-						<input
-							id="target-color"
-							type="color"
-							value={targetColor || '#10b981'}
-							oninput={(e) => {
-								const target = e.target as HTMLInputElement;
-								targetColor = target.value;
-							}}
-							disabled={targetIsConnecting}
-							class="w-8 h-8 rounded-full cursor-pointer border-0 p-0 overflow-hidden"
-							style="appearance: none; -webkit-appearance: none; -moz-appearance: none;"
-						/>
+					<div class="space-y-3">
+						<Label>Organization Color</Label>
+						<div class="flex gap-2">
+							{#each COLOR_PALETTE as color}
+								<button
+									type="button"
+									onclick={() => targetColor = color.value}
+									disabled={targetIsConnecting}
+									class="w-10 h-10 rounded-lg border-2 transition-all hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed"
+									class:border-foreground={targetColor === color.value}
+									class:border-transparent={targetColor !== color.value}
+									style="background-color: {color.value};"
+									title={color.name}
+								>
+									<span class="sr-only">{color.name}</span>
+								</button>
+							{/each}
+						</div>
 					</div>
 
 					{#if targetError}
@@ -571,29 +599,4 @@
 		</Card.Content>
 	</Card.Root>
 </div>
-
-<style>
-	input[type="color"] {
-		-webkit-appearance: none;
-		-moz-appearance: none;
-		appearance: none;
-		background-color: transparent;
-	}
-
-	input[type="color"]::-webkit-color-swatch-wrapper {
-		padding: 0;
-		border-radius: 9999px;
-		overflow: hidden;
-	}
-
-	input[type="color"]::-webkit-color-swatch {
-		border: none;
-		border-radius: 9999px;
-	}
-
-	input[type="color"]::-moz-color-swatch {
-		border: none;
-		border-radius: 9999px;
-	}
-</style>
 
