@@ -64,14 +64,13 @@ class WizardStore {
 		}
 	}
 
-	setSourceOrg(org: SalesforceOrg, accessToken?: string, instanceUrl?: string) {
+	setSourceOrg(org: SalesforceOrg) {
 		this.state.sourceOrg = {
 			org,
 			isConnected: true,
 			isConnecting: false,
-			error: null,
-			accessToken,
-			instanceUrl
+			error: null
+			// Tokens are kept server-side only, not stored in client state
 		};
 		// Mark step complete only if both orgs are connected
 		if (this.state.targetOrg.isConnected) {
@@ -92,14 +91,13 @@ class WizardStore {
 		}
 	}
 
-	setTargetOrg(org: SalesforceOrg, accessToken?: string, instanceUrl?: string) {
+	setTargetOrg(org: SalesforceOrg) {
 		this.state.targetOrg = {
 			org,
 			isConnected: true,
 			isConnecting: false,
-			error: null,
-			accessToken,
-			instanceUrl
+			error: null
+			// Tokens are kept server-side only, not stored in client state
 		};
 		// Mark step complete only if both orgs are connected
 		if (this.state.sourceOrg.isConnected) {

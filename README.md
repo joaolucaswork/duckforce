@@ -49,6 +49,14 @@ pnpm preview
 
 This application integrates with Salesforce to retrieve and deploy Lightning Web Components (LWC). Follow these steps to configure the Salesforce integration.
 
+### ⚠️ IMPORTANTE: Conectando Múltiplas Orgs
+
+**Se você precisa conectar a DUAS orgs diferentes** (source e target), você DEVE criar um Connected App em CADA org e usar Client IDs diferentes.
+
+📖 **Leia o guia completo**: [MULTI_ORG_SETUP.md](./MULTI_ORG_SETUP.md)
+
+**Por quê?** Não existe "Connected App global" no Salesforce. Um Connected App criado em uma org não funciona em outras orgs. Você receberá o erro `"Cross-org OAuth flows are not supported"` se tentar usar o mesmo Client ID para orgs diferentes.
+
 ### Prerequisites
 
 To use this application with Salesforce, you need:
@@ -56,6 +64,7 @@ To use this application with Salesforce, you need:
 - A Salesforce org (production, sandbox, or Developer Edition)
 - System Administrator permissions or API Enabled User permissions
 - Ability to create Connected Apps in your Salesforce org
+- **Para múltiplas orgs**: Um Connected App em CADA org que você quer conectar
 
 If you don't have a Salesforce org, you can sign up for a free Developer Edition at [developer.salesforce.com/signup](https://developer.salesforce.com/signup).
 

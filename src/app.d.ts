@@ -7,13 +7,6 @@ declare global {
 		// interface PageData {}
 		// interface PageState {}
 		// interface Platform {}
-
-		interface Env {
-			SALESFORCE_CLIENT_ID: string;
-			SALESFORCE_CLIENT_SECRET: string;
-			SALESFORCE_CALLBACK_URL: string;
-			SALESFORCE_LOGIN_URL: string;
-		}
 	}
 }
 

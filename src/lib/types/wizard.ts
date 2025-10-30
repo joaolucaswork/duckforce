@@ -45,8 +45,7 @@ export interface OrgConnection {
 	isConnected: boolean;
 	isConnecting: boolean;
 	error: string | null;
-	accessToken?: string;
-	instanceUrl?: string;
+	// Tokens are kept server-side only in httpOnly cookies, not in client state
 }
 
 export interface ComponentSelection {

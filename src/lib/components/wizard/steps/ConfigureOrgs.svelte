@@ -33,6 +33,7 @@
 	import type { SalesforceOrg } from '$lib/types/salesforce';
 	import type { Component } from 'svelte';
 	import duckforceArrow from '$lib/assets/duckforce-arrow.png';
+	import { onMount } from 'svelte';
 
 	// Preset Color Palette - Professional, muted tones with better contrast
 	const COLOR_PALETTE = [
@@ -202,114 +203,229 @@
 		setTimeout(updateTargetArrowVisibility, 300);
 	}
 
-	// Mock connection function for source org
-	async function handleConnectSource() {
-		if (!sourceInstanceUrl) {
-			wizardStore.setSourceOrgError('Please fill in all required fields');
-			return;
+	// Real OAuth connection function for source org
+	function handleConnectSource() {
+		// Build login URL with customization parameters
+		const params = new URLSearchParams({
+			org: 'source',
+			orgType: sourceOrgType,
+			...(sourceOrgName && { orgName: sourceOrgName }),
+			color: sourceColor,
+			icon: sourceIcon,
+			// Add timestamp to prevent browser caching
+			t: Date.now().toString()
+		});
+		window.location.href = `/api/auth/salesforce/login?${params.toString()}`;
+	}
+
+	// Real OAuth connection function for target org
+	function handleConnectTarget() {
+		// Build login URL with customization parameters
+		const params = new URLSearchParams({
+			org: 'target',
+			orgType: targetOrgType,
+			...(targetOrgName && { orgName: targetOrgName }),
+			color: targetColor,
+			icon: targetIcon,
+			// Add timestamp to prevent browser caching
+			t: Date.now().toString()
+		});
+		window.location.href = `/api/auth/salesforce/login?${params.toString()}`;
+	}
+
+	// Clear temporary OAuth cookies (useful after server restart)
+	async function handleClearTempCookies() {
+		try {
+			const response = await fetch('/api/auth/salesforce/clear-temp', {
+				method: 'POST'
+			});
+
+			if (!response.ok) {
+				throw new Error('Failed to clear cookies');
+			}
+
+			console.log('Temporary OAuth cookies cleared successfully');
+		} catch (err) {
+			console.error('Clear cookies error:', err);
+		}
+	}
+
+	async function handleDisconnectSource() {
+		try {
+			// Call logout endpoint
+			const response = await fetch('/api/auth/salesforce/logout?org=source', {
+				method: 'POST'
+			});
+
+			if (!response.ok) {
+				throw new Error('Logout failed');
+			}
+
+			// Clear local state
+			wizardStore.setSourceOrgConnecting(false);
+			wizardStore.state.sourceOrg = {
+				org: null,
+				isConnected: false,
+				isConnecting: false,
+				error: null
+			};
+			sourceOrgName = '';
+			sourceInstanceUrl = '';
+			sourceOrgType = 'production';
+			sourceApiVersion = '60.0';
+			sourceColor = '#2563eb'; // Default blue-600
+			sourceIcon = 'building-2'; // Default icon
+			sourceCustomizationTab = 'color'; // Reset to color tab
+			sourceOrgNameManuallyEdited = false; // Reset manual edit flag
+		} catch (err) {
+			console.error('Disconnect error:', err);
+			wizardStore.setSourceOrgError('Failed to disconnect');
+		}
+	}
+
+	async function handleDisconnectTarget() {
+		try {
+			// Call logout endpoint
+			const response = await fetch('/api/auth/salesforce/logout?org=target', {
+				method: 'POST'
+			});
+
+			if (!response.ok) {
+				throw new Error('Logout failed');
+			}
+
+			// Clear local state
+			wizardStore.setTargetOrgConnecting(false);
+			wizardStore.state.targetOrg = {
+				org: null,
+				isConnected: false,
+				isConnecting: false,
+				error: null
+			};
+			targetOrgName = '';
+			targetInstanceUrl = '';
+			targetOrgType = 'sandbox';
+			targetApiVersion = '60.0';
+			targetColor = '#059669'; // Default emerald-600
+			targetIcon = 'cloud'; // Default icon
+			targetCustomizationTab = 'color'; // Reset to color tab
+			targetOrgNameManuallyEdited = false; // Reset manual edit flag
+		} catch (err) {
+			console.error('Disconnect error:', err);
+			wizardStore.setTargetOrgError('Failed to disconnect');
+		}
+	}
+
+	// Check connection status on mount and handle OAuth callbacks
+	onMount(async () => {
+		// Handle OAuth callback query parameters
+		const urlParams = new URLSearchParams(window.location.search);
+		const connectedOrg = urlParams.get('connected');
+		const error = urlParams.get('error');
+
+		if (error) {
+			// Show error message
+			const errorMsg = decodeURIComponent(error);
+			// Determine which org failed based on recent activity
+			// For now, we'll show a general error
+			console.error('OAuth error:', errorMsg);
 		}
 
-		// Use a default name if not provided
-		const orgName = sourceOrgName || 'Source Organization';
+		if (connectedOrg) {
+			// Clear the query parameter from URL
+			const url = new URL(window.location.href);
+			url.searchParams.delete('connected');
+			url.searchParams.delete('error');
+			window.history.replaceState({}, '', url.toString());
+		}
 
-		wizardStore.setSourceOrgConnecting(true);
-
-		// Simulate API call
-		await new Promise(resolve => setTimeout(resolve, 1500));
-
+		// Check current connection status
 		try {
-			const org: SalesforceOrg = {
-				id: `org-${Date.now()}`,
-				name: orgName,
-				instanceUrl: sourceInstanceUrl,
-				orgType: sourceOrgType,
-				apiVersion: sourceApiVersion,
-				color: sourceColor,
-				icon: sourceIcon
-			};
+			const response = await fetch('/api/auth/salesforce/status');
+			if (!response.ok) {
+				throw new Error('Failed to fetch status');
+			}
 
-			wizardStore.setSourceOrg(org, 'mock-access-token', sourceInstanceUrl);
-			// Update the local name if it was empty
-			if (!sourceOrgName) {
-				sourceOrgName = orgName;
+			const status = await response.json();
+
+			// Update source org if connected
+			if (status.source?.isConnected && status.source.instanceUrl) {
+				// Use server-provided metadata if available, otherwise use local state
+				const orgName = status.source.orgName || sourceOrgName || extractOrgNameFromUrl(status.source.instanceUrl) || 'Source Organization';
+				const orgType = (status.source.orgType as 'production' | 'sandbox' | 'developer' | 'scratch') || sourceOrgType;
+				const color = status.source.color || sourceColor;
+				const icon = status.source.icon || sourceIcon;
+
+				const org: SalesforceOrg = {
+					id: status.source.orgId || `org-source-${Date.now()}`,
+					name: orgName,
+					instanceUrl: status.source.instanceUrl,
+					orgType,
+					apiVersion: sourceApiVersion,
+					color,
+					icon
+				};
+				// Don't pass tokens to the store - they stay server-side only
+				wizardStore.setSourceOrg(org);
+				sourceInstanceUrl = status.source.instanceUrl;
+				if (!sourceOrgNameManuallyEdited && status.source.orgName) {
+					sourceOrgName = status.source.orgName;
+				}
+				// Update UI state from server metadata
+				if (status.source.orgType) sourceOrgType = orgType;
+				if (status.source.color) sourceColor = color;
+				if (status.source.icon) sourceIcon = icon;
+			}
+
+			// Update target org if connected
+			if (status.target?.isConnected && status.target.instanceUrl) {
+				// Use server-provided metadata if available, otherwise use local state
+				const orgName = status.target.orgName || targetOrgName || extractOrgNameFromUrl(status.target.instanceUrl) || 'Target Organization';
+				const orgType = (status.target.orgType as 'production' | 'sandbox' | 'developer' | 'scratch') || targetOrgType;
+				const color = status.target.color || targetColor;
+				const icon = status.target.icon || targetIcon;
+
+				const org: SalesforceOrg = {
+					id: status.target.orgId || `org-target-${Date.now()}`,
+					name: orgName,
+					instanceUrl: status.target.instanceUrl,
+					orgType,
+					apiVersion: targetApiVersion,
+					color,
+					icon
+				};
+				// Don't pass tokens to the store - they stay server-side only
+				wizardStore.setTargetOrg(org);
+				targetInstanceUrl = status.target.instanceUrl;
+				if (!targetOrgNameManuallyEdited && status.target.orgName) {
+					targetOrgName = status.target.orgName;
+				}
+				// Update UI state from server metadata
+				if (status.target.orgType) targetOrgType = orgType;
+				if (status.target.color) targetColor = color;
+				if (status.target.icon) targetIcon = icon;
 			}
 		} catch (err) {
-			wizardStore.setSourceOrgError('Failed to connect to Salesforce org');
+			console.error('Failed to check connection status:', err);
 		}
-	}
-
-	// Mock connection function for target org
-	async function handleConnectTarget() {
-		if (!targetInstanceUrl) {
-			wizardStore.setTargetOrgError('Please fill in all required fields');
-			return;
-		}
-
-		// Use a default name if not provided
-		const orgName = targetOrgName || 'Destination Organization';
-
-		wizardStore.setTargetOrgConnecting(true);
-
-		// Simulate API call
-		await new Promise(resolve => setTimeout(resolve, 1500));
-
-		try {
-			const org: SalesforceOrg = {
-				id: `org-${Date.now()}`,
-				name: orgName,
-				instanceUrl: targetInstanceUrl,
-				orgType: targetOrgType,
-				apiVersion: targetApiVersion,
-				color: targetColor,
-				icon: targetIcon
-			};
-
-			wizardStore.setTargetOrg(org, 'mock-access-token', targetInstanceUrl);
-			// Update the local name if it was empty
-			if (!targetOrgName) {
-				targetOrgName = orgName;
-			}
-		} catch (err) {
-			wizardStore.setTargetOrgError('Failed to connect to Salesforce org');
-		}
-	}
-
-	function handleDisconnectSource() {
-		wizardStore.setSourceOrgConnecting(false);
-		wizardStore.state.sourceOrg = {
-			org: null,
-			isConnected: false,
-			isConnecting: false,
-			error: null
-		};
-		sourceOrgName = '';
-		sourceInstanceUrl = '';
-		sourceOrgType = 'production';
-		sourceApiVersion = '60.0';
-		sourceColor = '#2563eb'; // Default blue-600
-		sourceIcon = 'building-2'; // Default icon
-		sourceCustomizationTab = 'color'; // Reset to color tab
-		sourceOrgNameManuallyEdited = false; // Reset manual edit flag
-	}
-
-	function handleDisconnectTarget() {
-		wizardStore.setTargetOrgConnecting(false);
-		wizardStore.state.targetOrg = {
-			org: null,
-			isConnected: false,
-			isConnecting: false,
-			error: null
-		};
-		targetOrgName = '';
-		targetInstanceUrl = '';
-		targetOrgType = 'sandbox';
-		targetApiVersion = '60.0';
-		targetColor = '#059669'; // Default emerald-600
-		targetIcon = 'cloud'; // Default icon
-		targetCustomizationTab = 'color'; // Reset to color tab
-		targetOrgNameManuallyEdited = false; // Reset manual edit flag
-	}
+	});
 </script>
+
+<!-- Debug: Clear OAuth cookies button (only in development) -->
+{#if import.meta.env.DEV}
+	<div class="mb-4">
+		<Alert.Root variant="default" class="bg-yellow-50 border-yellow-200">
+			<Info class="h-4 w-4 text-yellow-600" />
+			<Alert.Title class="text-yellow-800">Modo de Desenvolvimento</Alert.Title>
+			<Alert.Description class="text-yellow-700 flex items-center justify-between">
+				<span>Se você reiniciou o servidor e está tendo erros de OAuth, clique aqui para limpar cookies temporários:</span>
+				<Button onclick={handleClearTempCookies} variant="outline" size="sm" class="ml-4 border-yellow-300 hover:bg-yellow-100">
+					Limpar Cookies OAuth
+				</Button>
+			</Alert.Description>
+		</Alert.Root>
+	</div>
+{/if}
 
 <div class="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] gap-6 items-center">
 	<!-- Source Organization -->
