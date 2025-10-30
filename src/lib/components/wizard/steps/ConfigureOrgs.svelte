@@ -7,7 +7,7 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import * as Card from '$lib/components/ui/card';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-	import { CheckCircle2, AlertCircle, Loader2, MoreVertical } from '@lucide/svelte';
+	import { CheckCircle2, AlertCircle, Loader2, MoreVertical, ArrowRight } from '@lucide/svelte';
 	import type { SalesforceOrg } from '$lib/types/salesforce';
 
 	// Source Org State
@@ -16,6 +16,7 @@
 	let sourceOrgType = $state<'production' | 'sandbox' | 'developer' | 'scratch'>('production');
 	let sourceApiVersion = $state('60.0');
 	let sourceColor = $state('#3b82f6'); // Default blue
+	let sourceNameEditing = $state(false);
 
 	// Target Org State
 	let targetOrgName = $state('');
@@ -23,6 +24,7 @@
 	let targetOrgType = $state<'production' | 'sandbox' | 'developer' | 'scratch'>('sandbox');
 	let targetApiVersion = $state('60.0');
 	let targetColor = $state('#10b981'); // Default green
+	let targetNameEditing = $state(false);
 
 	const sourceIsConnected = $derived(wizardStore.state.sourceOrg.isConnected);
 	const sourceIsConnecting = $derived(wizardStore.state.sourceOrg.isConnecting);
@@ -36,10 +38,13 @@
 
 	// Mock connection function for source org
 	async function handleConnectSource() {
-		if (!sourceOrgName || !sourceInstanceUrl) {
+		if (!sourceInstanceUrl) {
 			wizardStore.setSourceOrgError('Please fill in all required fields');
 			return;
 		}
+
+		// Use a default name if not provided
+		const orgName = sourceOrgName || 'Source Organization';
 
 		wizardStore.setSourceOrgConnecting(true);
 
@@ -49,7 +54,7 @@
 		try {
 			const org: SalesforceOrg = {
 				id: `org-${Date.now()}`,
-				name: sourceOrgName,
+				name: orgName,
 				instanceUrl: sourceInstanceUrl,
 				orgType: sourceOrgType,
 				apiVersion: sourceApiVersion,
@@ -57,6 +62,10 @@
 			};
 
 			wizardStore.setSourceOrg(org, 'mock-access-token', sourceInstanceUrl);
+			// Update the local name if it was empty
+			if (!sourceOrgName) {
+				sourceOrgName = orgName;
+			}
 		} catch (err) {
 			wizardStore.setSourceOrgError('Failed to connect to Salesforce org');
 		}
@@ -64,10 +73,13 @@
 
 	// Mock connection function for target org
 	async function handleConnectTarget() {
-		if (!targetOrgName || !targetInstanceUrl) {
+		if (!targetInstanceUrl) {
 			wizardStore.setTargetOrgError('Please fill in all required fields');
 			return;
 		}
+
+		// Use a default name if not provided
+		const orgName = targetOrgName || 'Destination Organization';
 
 		wizardStore.setTargetOrgConnecting(true);
 
@@ -77,7 +89,7 @@
 		try {
 			const org: SalesforceOrg = {
 				id: `org-${Date.now()}`,
-				name: targetOrgName,
+				name: orgName,
 				instanceUrl: targetInstanceUrl,
 				orgType: targetOrgType,
 				apiVersion: targetApiVersion,
@@ -85,6 +97,10 @@
 			};
 
 			wizardStore.setTargetOrg(org, 'mock-access-token', targetInstanceUrl);
+			// Update the local name if it was empty
+			if (!targetOrgName) {
+				targetOrgName = orgName;
+			}
 		} catch (err) {
 			wizardStore.setTargetOrgError('Failed to connect to Salesforce org');
 		}
@@ -121,17 +137,37 @@
 	}
 </script>
 
-<div class="space-y-6">
+<div class="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] gap-6 items-center">
 	<!-- Source Organization -->
-	<Card.Root>
+	<Card.Root class="shadow-none">
 		<Card.Header>
 			<div class="flex items-center justify-between">
-				<div class="flex items-center gap-3">
-					<div class="w-4 h-4 rounded-full" style="background-color: {sourceColor}"></div>
-					<div>
-						<Card.Title>Source Organization</Card.Title>
-						<Card.Description>The Salesforce org you want to migrate from</Card.Description>
-					</div>
+				<div class="flex-1">
+					{#if sourceIsConnected && sourceConnectedOrg}
+						<Card.Title>{sourceConnectedOrg.name}</Card.Title>
+						<Card.Description>Source</Card.Description>
+					{:else if sourceNameEditing}
+						<Input
+							bind:value={sourceOrgName}
+							placeholder="Enter organization name"
+							class="text-lg font-semibold h-auto px-0 border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+							onkeydown={(e) => {
+								if (e.key === 'Enter') {
+									sourceNameEditing = false;
+								}
+							}}
+							onblur={() => sourceNameEditing = false}
+							autofocus
+						/>
+					{:else}
+						<button
+							onclick={() => sourceNameEditing = true}
+							class="text-lg font-semibold text-left hover:text-muted-foreground transition-colors"
+						>
+							{sourceOrgName || 'Click to name organization'}
+						</button>
+						<Card.Description>Source</Card.Description>
+					{/if}
 				</div>
 				<DropdownMenu.Root>
 					<DropdownMenu.Trigger>
@@ -226,16 +262,6 @@
 				<!-- Connection Form -->
 				<div class="space-y-4">
 					<div class="space-y-2">
-						<Label for="source-org-name">Organization Name *</Label>
-						<Input
-							id="source-org-name"
-							bind:value={sourceOrgName}
-							placeholder="e.g., Production Org"
-							disabled={sourceIsConnecting}
-						/>
-					</div>
-
-					<div class="space-y-2">
 						<Label for="source-instance-url">Instance URL *</Label>
 						<Input
 							id="source-instance-url"
@@ -247,16 +273,14 @@
 
 					<div class="space-y-2">
 						<Label for="source-color">Organization Color</Label>
-						<div class="flex items-center gap-3">
-							<Input
-								id="source-color"
-								type="color"
-								bind:value={sourceColor}
-								disabled={sourceIsConnecting}
-								class="w-20 h-9 cursor-pointer"
-							/>
-							<span class="text-sm text-muted-foreground">{sourceColor}</span>
-						</div>
+						<input
+							id="source-color"
+							type="color"
+							bind:value={sourceColor}
+							disabled={sourceIsConnecting}
+							class="w-8 h-8 rounded-full cursor-pointer border-0 p-0 overflow-hidden"
+							style="appearance: none; -webkit-appearance: none; -moz-appearance: none;"
+						/>
 					</div>
 
 					{#if sourceError}
@@ -269,7 +293,7 @@
 
 					<Button
 						onclick={handleConnectSource}
-						disabled={sourceIsConnecting || !sourceOrgName || !sourceInstanceUrl}
+						disabled={sourceIsConnecting || !sourceInstanceUrl}
 						class="w-full"
 					>
 						{#if sourceIsConnecting}
@@ -284,16 +308,43 @@
 		</Card.Content>
 	</Card.Root>
 
-	<!-- Target Organization -->
-	<Card.Root>
+	<!-- Arrow Separator -->
+	<div class="hidden lg:flex items-center justify-center">
+		<div class="flex items-center justify-center w-12 h-12 rounded-full bg-muted text-muted-foreground">
+			<ArrowRight class="h-6 w-6" />
+		</div>
+	</div>
+
+	<!-- Destination Organization -->
+	<Card.Root class="shadow-none">
 		<Card.Header>
 			<div class="flex items-center justify-between">
-				<div class="flex items-center gap-3">
-					<div class="w-4 h-4 rounded-full" style="background-color: {targetColor}"></div>
-					<div>
-						<Card.Title>Destination Organization</Card.Title>
-						<Card.Description>The Salesforce org you want to migrate to</Card.Description>
-					</div>
+				<div class="flex-1">
+					{#if targetIsConnected && targetConnectedOrg}
+						<Card.Title>{targetConnectedOrg.name}</Card.Title>
+						<Card.Description>Destination</Card.Description>
+					{:else if targetNameEditing}
+						<Input
+							bind:value={targetOrgName}
+							placeholder="Enter organization name"
+							class="text-lg font-semibold h-auto px-0 border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+							onkeydown={(e) => {
+								if (e.key === 'Enter') {
+									targetNameEditing = false;
+								}
+							}}
+							onblur={() => targetNameEditing = false}
+							autofocus
+						/>
+					{:else}
+						<button
+							onclick={() => targetNameEditing = true}
+							class="text-lg font-semibold text-left hover:text-muted-foreground transition-colors"
+						>
+							{targetOrgName || 'Click to name organization'}
+						</button>
+						<Card.Description>Destination</Card.Description>
+					{/if}
 				</div>
 				<DropdownMenu.Root>
 					<DropdownMenu.Trigger>
@@ -388,16 +439,6 @@
 				<!-- Connection Form -->
 				<div class="space-y-4">
 					<div class="space-y-2">
-						<Label for="target-org-name">Organization Name *</Label>
-						<Input
-							id="target-org-name"
-							bind:value={targetOrgName}
-							placeholder="e.g., UAT Sandbox"
-							disabled={targetIsConnecting}
-						/>
-					</div>
-
-					<div class="space-y-2">
 						<Label for="target-instance-url">Instance URL *</Label>
 						<Input
 							id="target-instance-url"
@@ -409,16 +450,14 @@
 
 					<div class="space-y-2">
 						<Label for="target-color">Organization Color</Label>
-						<div class="flex items-center gap-3">
-							<Input
-								id="target-color"
-								type="color"
-								bind:value={targetColor}
-								disabled={targetIsConnecting}
-								class="w-20 h-9 cursor-pointer"
-							/>
-							<span class="text-sm text-muted-foreground">{targetColor}</span>
-						</div>
+						<input
+							id="target-color"
+							type="color"
+							bind:value={targetColor}
+							disabled={targetIsConnecting}
+							class="w-8 h-8 rounded-full cursor-pointer border-0 p-0 overflow-hidden"
+							style="appearance: none; -webkit-appearance: none; -moz-appearance: none;"
+						/>
 					</div>
 
 					{#if targetError}
@@ -431,7 +470,7 @@
 
 					<Button
 						onclick={handleConnectTarget}
-						disabled={targetIsConnecting || !targetOrgName || !targetInstanceUrl}
+						disabled={targetIsConnecting || !targetInstanceUrl}
 						class="w-full"
 					>
 						{#if targetIsConnecting}
@@ -446,4 +485,29 @@
 		</Card.Content>
 	</Card.Root>
 </div>
+
+<style>
+	input[type="color"] {
+		-webkit-appearance: none;
+		-moz-appearance: none;
+		appearance: none;
+		background-color: transparent;
+	}
+
+	input[type="color"]::-webkit-color-swatch-wrapper {
+		padding: 0;
+		border-radius: 9999px;
+		overflow: hidden;
+	}
+
+	input[type="color"]::-webkit-color-swatch {
+		border: none;
+		border-radius: 9999px;
+	}
+
+	input[type="color"]::-moz-color-swatch {
+		border: none;
+		border-radius: 9999px;
+	}
+</style>
 
