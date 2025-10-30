@@ -156,8 +156,18 @@
 			</header>
 
 			<!-- Main Content -->
-			<main class="flex-1 overflow-auto flex items-center">
-				<div class="max-w-4xl mx-auto px-8 py-8 w-full">
+			<main class="flex-1 overflow-auto flex items-center relative">
+				<!-- Dot Grid Background Pattern -->
+				<svg class="absolute inset-0 h-full w-full pointer-events-none" xmlns="http://www.w3.org/2000/svg">
+					<defs>
+						<pattern id="wizard-dot-grid" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
+							<circle cx="2" cy="2" r="1.5" fill="white" opacity="0.05" />
+						</pattern>
+					</defs>
+					<rect width="100%" height="100%" fill="url(#wizard-dot-grid)" />
+				</svg>
+
+				<div class="max-w-4xl mx-auto px-8 py-8 w-full relative z-10">
 					<!-- Step Header: Exibe o número do passo, título e descrição de forma centralizada -->
 					<!-- <div class="mb-10 text-center"> -->
 						<!-- Indicador numérico do passo atual (círculo com número) -->
@@ -180,7 +190,7 @@
 					</div>
 
 					<!-- Navigation Footer -->
-					<div class="mt-12 pt-6 border-t flex items-center justify-between">
+					<div class="mt-12 flex items-center justify-between">
 						<Button
 							variant="outline"
 							onclick={handlePrevious}

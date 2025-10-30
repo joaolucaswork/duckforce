@@ -306,7 +306,19 @@
 
 <div class="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] gap-6 items-center">
 	<!-- Source Organization -->
-	<Card.Root class="shadow-none">
+	<div class="space-y-0">
+		<!-- Source Label Container -->
+		{#snippet sourceLabelHeader()}
+			{@const SourceIconComponent = getIconComponent(sourceIcon)}
+			<div class="bg-card px-6 py-4 border-b-2 rounded-t-xl flex items-center gap-2" style="border-color: {sourceColor};">
+				<div class="flex items-center justify-center w-6 h-6 rounded" style="background-color: {sourceColor};">
+					<SourceIconComponent class="w-4 h-4 text-white" />
+				</div>
+				<p class="text-sm font-medium text-muted-foreground">Source</p>
+			</div>
+		{/snippet}
+		{@render sourceLabelHeader()}
+		<Card.Root class="shadow-none rounded-t-none border-t-0">
 		{#if !sourceIsConnected}
 			<Card.Header>
 				<div class="flex items-center justify-between">
@@ -336,22 +348,7 @@
 								>
 									{sourceOrgName}
 								</button>
-								<Card.Description class="flex items-center gap-2">
-									{#if sourceCustomizationTab !== 'icon'}
-										{@const SourceIconComponent = getIconComponent(sourceIcon)}
-										<SourceIconComponent class="h-4 w-4" style="color: {sourceColor};" />
-									{/if}
-									Source
-								</Card.Description>
 							{/if}
-						{:else}
-							<Card.Description class="flex items-center gap-2">
-								{#if sourceCustomizationTab !== 'icon'}
-									{@const SourceIconComponent = getIconComponent(sourceIcon)}
-									<SourceIconComponent class="h-4 w-4" style="color: {sourceColor};" />
-								{/if}
-								Source
-							</Card.Description>
 						{/if}
 					</div>
 					<DropdownMenu.Root>
@@ -389,19 +386,11 @@
 				<div class="space-y-6">
 					<!-- Header Section with Org Info (integrated with card) -->
 					{#snippet sourceOrgHeader()}
-						{@const SourceIconComponent = getIconComponent(sourceConnectedOrg.icon)}
 						<div
-							class="-mx-6 -mt-6 rounded-t-xl px-6 py-5 flex items-start justify-between text-white"
+							class="-mx-6 -mt-6 px-6 py-5 flex items-start justify-between text-white"
 							style="background-color: {sourceColor};"
 						>
 							<div class="flex-1 flex items-start gap-3">
-								<!-- Org Icon - Hidden when on Icon tab -->
-								{#if sourceCustomizationTab !== 'icon'}
-									<div class="flex-shrink-0 mt-0.5">
-										<SourceIconComponent class="h-6 w-6 opacity-90" />
-									</div>
-								{/if}
-
 								<div class="flex-1 space-y-1">
 									<!-- Org Name -->
 									<h2 class="text-xl font-semibold tracking-tight">
@@ -581,6 +570,7 @@
 			{/if}
 		</Card.Content>
 	</Card.Root>
+	</div>
 
 	<!-- Arrow Separator -->
 	<div class="hidden lg:flex items-center justify-center">
@@ -602,7 +592,19 @@
 	</div>
 
 	<!-- Destination Organization -->
-	<Card.Root class="shadow-none">
+	<div class="space-y-0">
+		<!-- Destination Label Container -->
+		{#snippet targetLabelHeader()}
+			{@const TargetIconComponent = getIconComponent(targetIcon)}
+			<div class="bg-card px-6 py-4 border-b-2 rounded-t-xl flex items-center gap-2" style="border-color: {targetColor};">
+				<div class="flex items-center justify-center w-6 h-6 rounded" style="background-color: {targetColor};">
+					<TargetIconComponent class="w-4 h-4 text-white" />
+				</div>
+				<p class="text-sm font-medium text-muted-foreground">Destination</p>
+			</div>
+		{/snippet}
+		{@render targetLabelHeader()}
+		<Card.Root class="shadow-none rounded-t-none border-t-0">
 		{#if !targetIsConnected}
 			<Card.Header>
 				<div class="flex items-center justify-between">
@@ -632,22 +634,7 @@
 								>
 									{targetOrgName}
 								</button>
-								<Card.Description class="flex items-center gap-2">
-									{#if targetCustomizationTab !== 'icon'}
-										{@const TargetIconComponent = getIconComponent(targetIcon)}
-										<TargetIconComponent class="h-4 w-4" style="color: {targetColor};" />
-									{/if}
-									Destination
-								</Card.Description>
 							{/if}
-						{:else}
-							<Card.Description class="flex items-center gap-2">
-								{#if targetCustomizationTab !== 'icon'}
-									{@const TargetIconComponent = getIconComponent(targetIcon)}
-									<TargetIconComponent class="h-4 w-4" style="color: {targetColor};" />
-								{/if}
-								Destination
-							</Card.Description>
 						{/if}
 					</div>
 					<DropdownMenu.Root>
@@ -685,19 +672,11 @@
 				<div class="space-y-6">
 					<!-- Header Section with Org Info (integrated with card) -->
 					{#snippet targetOrgHeader()}
-						{@const TargetIconComponent = getIconComponent(targetConnectedOrg.icon)}
 						<div
-							class="-mx-6 -mt-6 rounded-t-xl px-6 py-5 flex items-start justify-between text-white"
+							class="-mx-6 -mt-6 px-6 py-5 flex items-start justify-between text-white"
 							style="background-color: {targetColor};"
 						>
 							<div class="flex-1 flex items-start gap-3">
-								<!-- Org Icon - Hidden when on Icon tab -->
-								{#if targetCustomizationTab !== 'icon'}
-									<div class="flex-shrink-0 mt-0.5">
-										<TargetIconComponent class="h-6 w-6 opacity-90" />
-									</div>
-								{/if}
-
 								<div class="flex-1 space-y-1">
 									<!-- Org Name -->
 									<h2 class="text-xl font-semibold tracking-tight">
@@ -877,5 +856,6 @@
 			{/if}
 		</Card.Content>
 	</Card.Root>
+	</div>
 </div>
 
