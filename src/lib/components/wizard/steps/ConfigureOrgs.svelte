@@ -27,7 +27,8 @@
 		Target,
 		TrendingUp,
 		ChevronRight,
-		ChevronLeft
+		ChevronLeft,
+		Pencil
 	} from '@lucide/svelte';
 	import type { SalesforceOrg } from '$lib/types/salesforce';
 	import type { Component } from 'svelte';
@@ -122,22 +123,28 @@
 
 	// Auto-extract source org name from URL
 	$effect(() => {
-		// Only auto-fill if the name hasn't been manually edited and is currently empty
-		if (!sourceOrgNameManuallyEdited && sourceInstanceUrl && !sourceOrgName) {
+		// Only auto-fill if the name hasn't been manually edited
+		if (!sourceOrgNameManuallyEdited && sourceInstanceUrl) {
 			const extractedName = extractOrgNameFromUrl(sourceInstanceUrl);
 			if (extractedName) {
 				sourceOrgName = extractedName;
+			} else {
+				// Clear the name if URL is invalid or empty
+				sourceOrgName = '';
 			}
 		}
 	});
 
 	// Auto-extract target org name from URL
 	$effect(() => {
-		// Only auto-fill if the name hasn't been manually edited and is currently empty
-		if (!targetOrgNameManuallyEdited && targetInstanceUrl && !targetOrgName) {
+		// Only auto-fill if the name hasn't been manually edited
+		if (!targetOrgNameManuallyEdited && targetInstanceUrl) {
 			const extractedName = extractOrgNameFromUrl(targetInstanceUrl);
 			if (extractedName) {
 				targetOrgName = extractedName;
+			} else {
+				// Clear the name if URL is invalid or empty
+				targetOrgName = '';
 			}
 		}
 	});
@@ -310,27 +317,24 @@
 		<!-- Source Label Container -->
 		{#snippet sourceLabelHeader()}
 			{@const SourceIconComponent = getIconComponent(sourceIcon)}
-			<div class="bg-card px-6 py-4 border-b-2 rounded-t-xl flex items-center gap-2" style="border-color: {sourceColor};">
-				<div class="flex items-center justify-center w-6 h-6 rounded" style="background-color: {sourceColor};">
-					<SourceIconComponent class="w-4 h-4 text-white" />
-				</div>
-				<p class="text-sm font-medium text-muted-foreground">Source</p>
-			</div>
-		{/snippet}
-		{@render sourceLabelHeader()}
-		<Card.Root class="shadow-none rounded-t-none border-t-0">
-		{#if !sourceIsConnected}
-			<Card.Header>
-				<div class="flex items-center justify-between">
-					<div class="flex-1">
-						{#if sourceOrgName}
+			<div class="bg-card px-6 py-4 border-b-2 rounded-t-xl flex items-center justify-between" style="border-color: {sourceColor};">
+				<div class="flex items-center gap-3 flex-1 min-w-0">
+					<div class="flex items-center gap-2 flex-shrink-0">
+						<div class="flex items-center justify-center w-6 h-6 rounded" style="background-color: {sourceColor};">
+							<SourceIconComponent class="w-4 h-4 text-white" />
+						</div>
+						<p class="text-sm font-medium text-muted-foreground">Source</p>
+					</div>
+
+					<!-- Editable Org Name -->
+					{#if sourceOrgName}
+						<div class="flex-1 min-w-0">
 							{#if sourceNameEditing}
 								<Input
 									bind:value={sourceOrgName}
 									placeholder="Enter organization name"
-									class="text-lg font-semibold h-auto px-0 border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+									class="text-sm font-semibold h-auto px-2 py-1 border focus-visible:ring-1"
 									oninput={() => {
-										// Mark as manually edited when user types
 										sourceOrgNameManuallyEdited = true;
 									}}
 									onkeydown={(e) => {
@@ -342,44 +346,61 @@
 									autofocus
 								/>
 							{:else}
-								<button
-									onclick={() => sourceNameEditing = true}
-									class="text-lg font-semibold text-left hover:text-muted-foreground transition-colors"
-								>
-									{sourceOrgName}
-								</button>
+								<Tooltip.Root>
+									<Tooltip.Trigger>
+										{#snippet child({ props })}
+											<button
+												{...props}
+												onclick={() => sourceNameEditing = true}
+												class="group text-sm font-semibold text-left hover:text-muted-foreground transition-colors truncate max-w-full flex items-center gap-1.5"
+											>
+												<span class="truncate">{sourceOrgName}</span>
+												<Pencil class="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+											</button>
+										{/snippet}
+									</Tooltip.Trigger>
+									<Tooltip.Content side="bottom" class="max-w-xs">
+										<div class="space-y-1 text-xs">
+											<p class="font-medium">Change Organization Name</p>
+											<p class="text-muted-foreground">This is just a label for your reference. It won't affect the migration.</p>
+										</div>
+									</Tooltip.Content>
+								</Tooltip.Root>
 							{/if}
-						{/if}
-					</div>
-					<DropdownMenu.Root>
-						<DropdownMenu.Trigger>
-							{#snippet child({ props })}
-								<Button {...props} variant="ghost" size="icon" class="h-8 w-8">
-									<MoreVertical class="h-4 w-4" />
-									<span class="sr-only">Open menu</span>
-								</Button>
-							{/snippet}
-						</DropdownMenu.Trigger>
-						<DropdownMenu.Content align="end" class="w-56">
-							<DropdownMenu.Label>Advanced Options</DropdownMenu.Label>
-							<DropdownMenu.Separator />
-
-							<!-- API Version -->
-							<div class="px-2 py-2">
-								<Label for="source-api-version-menu" class="text-xs text-muted-foreground">API Version</Label>
-								<Input
-									id="source-api-version-menu"
-									bind:value={sourceApiVersion}
-									placeholder="60.0"
-									disabled={sourceIsConnecting}
-									class="mt-1.5 h-8"
-								/>
-							</div>
-						</DropdownMenu.Content>
-					</DropdownMenu.Root>
+						</div>
+					{/if}
 				</div>
-			</Card.Header>
-		{/if}
+
+				<DropdownMenu.Root>
+					<DropdownMenu.Trigger>
+						{#snippet child({ props })}
+							<Button {...props} variant="ghost" size="icon" class="h-8 w-8 flex-shrink-0">
+								<MoreVertical class="h-4 w-4" />
+								<span class="sr-only">Source options</span>
+							</Button>
+						{/snippet}
+					</DropdownMenu.Trigger>
+					<DropdownMenu.Content align="end" class="w-56">
+						<DropdownMenu.Label>Advanced Options</DropdownMenu.Label>
+						<DropdownMenu.Separator />
+
+						<!-- API Version -->
+						<div class="px-2 py-2">
+							<Label for="source-api-version-header" class="text-xs text-muted-foreground">API Version</Label>
+							<Input
+								id="source-api-version-header"
+								bind:value={sourceApiVersion}
+								placeholder="60.0"
+								disabled={sourceIsConnecting}
+								class="mt-1.5 h-8"
+							/>
+						</div>
+					</DropdownMenu.Content>
+				</DropdownMenu.Root>
+			</div>
+		{/snippet}
+		{@render sourceLabelHeader()}
+		<Card.Root class="shadow-none rounded-t-none border-t-0">
 		<Card.Content>
 			{#if sourceIsConnected && sourceConnectedOrg}
 				<!-- Connected State -->
@@ -403,20 +424,55 @@
 								</div>
 							</div>
 
-							<!-- Info Icon with Tooltip -->
-							<Tooltip.Root>
-								<Tooltip.Trigger>
-									<div class="p-1.5 hover:bg-white/10 rounded-md transition-colors">
-										<Info class="h-4 w-4 opacity-90" />
-									</div>
-								</Tooltip.Trigger>
-								<Tooltip.Content side="left" class="max-w-xs">
-									<div class="space-y-2 text-xs">
-										<div><strong>Instance URL:</strong><br/>{sourceConnectedOrg.instanceUrl}</div>
-										<div><strong>API Version:</strong> {sourceConnectedOrg.apiVersion}</div>
-									</div>
-								</Tooltip.Content>
-							</Tooltip.Root>
+							<!-- Actions -->
+							<div class="flex items-center gap-1">
+								<!-- Info Icon with Tooltip -->
+								<Tooltip.Root>
+									<Tooltip.Trigger>
+										<div class="p-1.5 hover:bg-white/10 rounded-md transition-colors">
+											<Info class="h-4 w-4 opacity-90" />
+										</div>
+									</Tooltip.Trigger>
+									<Tooltip.Content side="left" class="max-w-xs">
+										<div class="space-y-2 text-xs">
+											<div><strong>Instance URL:</strong><br/>{sourceConnectedOrg.instanceUrl}</div>
+											<div><strong>API Version:</strong> {sourceConnectedOrg.apiVersion}</div>
+										</div>
+									</Tooltip.Content>
+								</Tooltip.Root>
+
+								<!-- More Options Menu -->
+								<DropdownMenu.Root>
+									<DropdownMenu.Trigger>
+										{#snippet child({ props })}
+											<Button {...props} variant="ghost" size="icon" class="h-8 w-8 text-white hover:bg-white/10">
+												<MoreVertical class="h-4 w-4" />
+												<span class="sr-only">More options</span>
+											</Button>
+										{/snippet}
+									</DropdownMenu.Trigger>
+									<DropdownMenu.Content align="end" class="w-56">
+										<DropdownMenu.Label>Advanced Options</DropdownMenu.Label>
+										<DropdownMenu.Separator />
+
+										<!-- API Version -->
+										<div class="px-2 py-2">
+											<Label for="source-api-version-menu" class="text-xs text-muted-foreground">API Version</Label>
+											<Input
+												id="source-api-version-menu"
+												bind:value={sourceApiVersion}
+												placeholder="60.0"
+												class="mt-1.5 h-8"
+											/>
+										</div>
+
+										<DropdownMenu.Separator />
+										<DropdownMenu.Item class="text-destructive" onclick={handleDisconnectSource}>
+											Disconnect
+										</DropdownMenu.Item>
+									</DropdownMenu.Content>
+								</DropdownMenu.Root>
+							</div>
 						</div>
 					{/snippet}
 
@@ -596,27 +652,24 @@
 		<!-- Destination Label Container -->
 		{#snippet targetLabelHeader()}
 			{@const TargetIconComponent = getIconComponent(targetIcon)}
-			<div class="bg-card px-6 py-4 border-b-2 rounded-t-xl flex items-center gap-2" style="border-color: {targetColor};">
-				<div class="flex items-center justify-center w-6 h-6 rounded" style="background-color: {targetColor};">
-					<TargetIconComponent class="w-4 h-4 text-white" />
-				</div>
-				<p class="text-sm font-medium text-muted-foreground">Destination</p>
-			</div>
-		{/snippet}
-		{@render targetLabelHeader()}
-		<Card.Root class="shadow-none rounded-t-none border-t-0">
-		{#if !targetIsConnected}
-			<Card.Header>
-				<div class="flex items-center justify-between">
-					<div class="flex-1">
-						{#if targetOrgName}
+			<div class="bg-card px-6 py-4 border-b-2 rounded-t-xl flex items-center justify-between" style="border-color: {targetColor};">
+				<div class="flex items-center gap-3 flex-1 min-w-0">
+					<div class="flex items-center gap-2 flex-shrink-0">
+						<div class="flex items-center justify-center w-6 h-6 rounded" style="background-color: {targetColor};">
+							<TargetIconComponent class="w-4 h-4 text-white" />
+						</div>
+						<p class="text-sm font-medium text-muted-foreground">Destination</p>
+					</div>
+
+					<!-- Editable Org Name -->
+					{#if targetOrgName}
+						<div class="flex-1 min-w-0">
 							{#if targetNameEditing}
 								<Input
 									bind:value={targetOrgName}
 									placeholder="Enter organization name"
-									class="text-lg font-semibold h-auto px-0 border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+									class="text-sm font-semibold h-auto px-2 py-1 border focus-visible:ring-1"
 									oninput={() => {
-										// Mark as manually edited when user types
 										targetOrgNameManuallyEdited = true;
 									}}
 									onkeydown={(e) => {
@@ -628,44 +681,61 @@
 									autofocus
 								/>
 							{:else}
-								<button
-									onclick={() => targetNameEditing = true}
-									class="text-lg font-semibold text-left hover:text-muted-foreground transition-colors"
-								>
-									{targetOrgName}
-								</button>
+								<Tooltip.Root>
+									<Tooltip.Trigger>
+										{#snippet child({ props })}
+											<button
+												{...props}
+												onclick={() => targetNameEditing = true}
+												class="group text-sm font-semibold text-left hover:text-muted-foreground transition-colors truncate max-w-full flex items-center gap-1.5"
+											>
+												<span class="truncate">{targetOrgName}</span>
+												<Pencil class="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+											</button>
+										{/snippet}
+									</Tooltip.Trigger>
+									<Tooltip.Content side="bottom" class="max-w-xs">
+										<div class="space-y-1 text-xs">
+											<p class="font-medium">Change Organization Name</p>
+											<p class="text-muted-foreground">This is just a label for your reference. It won't affect the migration.</p>
+										</div>
+									</Tooltip.Content>
+								</Tooltip.Root>
 							{/if}
-						{/if}
-					</div>
-					<DropdownMenu.Root>
-						<DropdownMenu.Trigger>
-							{#snippet child({ props })}
-								<Button {...props} variant="ghost" size="icon" class="h-8 w-8">
-									<MoreVertical class="h-4 w-4" />
-									<span class="sr-only">Open menu</span>
-								</Button>
-							{/snippet}
-						</DropdownMenu.Trigger>
-						<DropdownMenu.Content align="end" class="w-56">
-							<DropdownMenu.Label>Advanced Options</DropdownMenu.Label>
-							<DropdownMenu.Separator />
-
-							<!-- API Version -->
-							<div class="px-2 py-2">
-								<Label for="target-api-version-menu" class="text-xs text-muted-foreground">API Version</Label>
-								<Input
-									id="target-api-version-menu"
-									bind:value={targetApiVersion}
-									placeholder="60.0"
-									disabled={targetIsConnecting}
-									class="mt-1.5 h-8"
-								/>
-							</div>
-						</DropdownMenu.Content>
-					</DropdownMenu.Root>
+						</div>
+					{/if}
 				</div>
-			</Card.Header>
-		{/if}
+
+				<DropdownMenu.Root>
+					<DropdownMenu.Trigger>
+						{#snippet child({ props })}
+							<Button {...props} variant="ghost" size="icon" class="h-8 w-8 flex-shrink-0">
+								<MoreVertical class="h-4 w-4" />
+								<span class="sr-only">Destination options</span>
+							</Button>
+						{/snippet}
+					</DropdownMenu.Trigger>
+					<DropdownMenu.Content align="end" class="w-56">
+						<DropdownMenu.Label>Advanced Options</DropdownMenu.Label>
+						<DropdownMenu.Separator />
+
+						<!-- API Version -->
+						<div class="px-2 py-2">
+							<Label for="target-api-version-header" class="text-xs text-muted-foreground">API Version</Label>
+							<Input
+								id="target-api-version-header"
+								bind:value={targetApiVersion}
+								placeholder="60.0"
+								disabled={targetIsConnecting}
+								class="mt-1.5 h-8"
+							/>
+						</div>
+					</DropdownMenu.Content>
+				</DropdownMenu.Root>
+			</div>
+		{/snippet}
+		{@render targetLabelHeader()}
+		<Card.Root class="shadow-none rounded-t-none border-t-0">
 		<Card.Content>
 			{#if targetIsConnected && targetConnectedOrg}
 				<!-- Connected State -->
@@ -689,20 +759,55 @@
 								</div>
 							</div>
 
-							<!-- Info Icon with Tooltip -->
-							<Tooltip.Root>
-								<Tooltip.Trigger>
-									<div class="p-1.5 hover:bg-white/10 rounded-md transition-colors">
-										<Info class="h-4 w-4 opacity-90" />
-									</div>
-								</Tooltip.Trigger>
-								<Tooltip.Content side="left" class="max-w-xs">
-									<div class="space-y-2 text-xs">
-										<div><strong>Instance URL:</strong><br/>{targetConnectedOrg.instanceUrl}</div>
-										<div><strong>API Version:</strong> {targetConnectedOrg.apiVersion}</div>
-									</div>
-								</Tooltip.Content>
-							</Tooltip.Root>
+							<!-- Actions -->
+							<div class="flex items-center gap-1">
+								<!-- Info Icon with Tooltip -->
+								<Tooltip.Root>
+									<Tooltip.Trigger>
+										<div class="p-1.5 hover:bg-white/10 rounded-md transition-colors">
+											<Info class="h-4 w-4 opacity-90" />
+										</div>
+									</Tooltip.Trigger>
+									<Tooltip.Content side="left" class="max-w-xs">
+										<div class="space-y-2 text-xs">
+											<div><strong>Instance URL:</strong><br/>{targetConnectedOrg.instanceUrl}</div>
+											<div><strong>API Version:</strong> {targetConnectedOrg.apiVersion}</div>
+										</div>
+									</Tooltip.Content>
+								</Tooltip.Root>
+
+								<!-- More Options Menu -->
+								<DropdownMenu.Root>
+									<DropdownMenu.Trigger>
+										{#snippet child({ props })}
+											<Button {...props} variant="ghost" size="icon" class="h-8 w-8 text-white hover:bg-white/10">
+												<MoreVertical class="h-4 w-4" />
+												<span class="sr-only">More options</span>
+											</Button>
+										{/snippet}
+									</DropdownMenu.Trigger>
+									<DropdownMenu.Content align="end" class="w-56">
+										<DropdownMenu.Label>Advanced Options</DropdownMenu.Label>
+										<DropdownMenu.Separator />
+
+										<!-- API Version -->
+										<div class="px-2 py-2">
+											<Label for="target-api-version-menu" class="text-xs text-muted-foreground">API Version</Label>
+											<Input
+												id="target-api-version-menu"
+												bind:value={targetApiVersion}
+												placeholder="60.0"
+												class="mt-1.5 h-8"
+											/>
+										</div>
+
+										<DropdownMenu.Separator />
+										<DropdownMenu.Item class="text-destructive" onclick={handleDisconnectTarget}>
+											Disconnect
+										</DropdownMenu.Item>
+									</DropdownMenu.Content>
+								</DropdownMenu.Root>
+							</div>
 						</div>
 					{/snippet}
 
