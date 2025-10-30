@@ -41,12 +41,10 @@ class WizardStore {
 
 	canProceed(): boolean {
 		const step = this.state.currentStep;
-		
+
 		switch (step) {
-			case 'connect-source':
-				return this.state.sourceOrg.isConnected;
-			case 'connect-target':
-				return this.state.targetOrg.isConnected;
+			case 'configure-orgs':
+				return this.state.sourceOrg.isConnected && this.state.targetOrg.isConnected;
 			case 'select-components':
 				return this.state.componentSelection.selectedIds.size > 0;
 			case 'review-dependencies':
@@ -75,7 +73,10 @@ class WizardStore {
 			accessToken,
 			instanceUrl
 		};
-		this.markStepComplete('connect-source');
+		// Mark step complete only if both orgs are connected
+		if (this.state.targetOrg.isConnected) {
+			this.markStepComplete('configure-orgs');
+		}
 	}
 
 	setSourceOrgError(error: string) {
@@ -100,7 +101,10 @@ class WizardStore {
 			accessToken,
 			instanceUrl
 		};
-		this.markStepComplete('connect-target');
+		// Mark step complete only if both orgs are connected
+		if (this.state.sourceOrg.isConnected) {
+			this.markStepComplete('configure-orgs');
+		}
 	}
 
 	setTargetOrgError(error: string) {

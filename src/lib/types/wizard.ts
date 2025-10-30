@@ -1,8 +1,7 @@
 import type { SalesforceOrg, SalesforceComponent } from './salesforce';
 
-export type WizardStep = 
-	| 'connect-source'
-	| 'connect-target'
+export type WizardStep =
+	| 'configure-orgs'
 	| 'select-components'
 	| 'review-dependencies'
 	| 'execute-migration';
@@ -16,34 +15,28 @@ export interface WizardStepConfig {
 
 export const WIZARD_STEPS: WizardStepConfig[] = [
 	{
-		id: 'connect-source',
-		title: 'Connect Source Org',
-		description: 'Connect to the Salesforce org you want to migrate from',
+		id: 'configure-orgs',
+		title: 'Configure Organizations',
+		description: 'Configure both source and destination Salesforce organizations',
 		order: 1
-	},
-	{
-		id: 'connect-target',
-		title: 'Connect Target Org',
-		description: 'Connect to the Salesforce org you want to migrate to',
-		order: 2
 	},
 	{
 		id: 'select-components',
 		title: 'Select Components',
 		description: 'Choose the components you want to migrate',
-		order: 3
+		order: 2
 	},
 	{
 		id: 'review-dependencies',
 		title: 'Review Dependencies',
 		description: 'Review all discovered dependencies',
-		order: 4
+		order: 3
 	},
 	{
 		id: 'execute-migration',
 		title: 'Execute Migration',
 		description: 'Migrate your components to the target org',
-		order: 5
+		order: 4
 	}
 ];
 
@@ -90,7 +83,7 @@ export interface WizardState {
 }
 
 export const initialWizardState: WizardState = {
-	currentStep: 'connect-source',
+	currentStep: 'configure-orgs',
 	completedSteps: new Set(),
 	sourceOrg: {
 		org: null,
