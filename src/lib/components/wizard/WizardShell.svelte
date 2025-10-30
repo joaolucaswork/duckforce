@@ -2,9 +2,9 @@
 	import { wizardStore } from '$lib/stores/wizard.svelte';
 	import { WIZARD_STEPS } from '$lib/types/wizard';
 	import { Button } from '$lib/components/ui/button';
-	import * as Card from '$lib/components/ui/card';
-	import { Badge } from '$lib/components/ui/badge';
-	import { Check } from '@lucide/svelte';
+	import * as Sidebar from '$lib/components/ui/sidebar';
+	import * as Tooltip from '$lib/components/ui/tooltip';
+	import { Check, ChevronRight, X, Info } from '@lucide/svelte';
 
 	interface Props {
 		children: import('svelte').Snippet;
@@ -43,110 +43,157 @@
 	}
 </script>
 
-<div class="min-h-screen bg-background">
-	<!-- Header -->
-	<header class="border-b">
-		<div class="container mx-auto px-6 py-4">
-			<div class="flex items-center justify-between">
-				<div>
-					<h1 class="text-2xl font-bold tracking-tight">SalesDuck</h1>
-					<p class="text-sm text-muted-foreground">Migration Wizard</p>
-				</div>
-				<Button variant="outline" href="/">
-					Back to Dashboard
-				</Button>
+<Sidebar.Provider>
+	<Sidebar.Root collapsible="offcanvas">
+		<!-- Sidebar Header -->
+		<Sidebar.Header>
+			<div class="px-2 py-2">
+				<h2 class="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+					Order Steps
+				</h2>
 			</div>
-		</div>
-	</header>
+		</Sidebar.Header>
 
-	<!-- Main Content -->
-	<div class="container mx-auto px-6 py-8">
-		<div class="max-w-6xl mx-auto space-y-8">
-			<!-- Progress Steps -->
-			<Card.Root>
-				<Card.Content class="pt-6">
-					<div class="flex items-center justify-between">
+		<!-- Sidebar Content -->
+		<Sidebar.Content>
+			<Sidebar.Group>
+				<Sidebar.GroupContent>
+					<Sidebar.Menu>
 						{#each WIZARD_STEPS as step, index}
 							{@const isComplete = wizardStore.isStepComplete(step.id)}
 							{@const isCurrent = step.id === wizardStore.state.currentStep}
 							{@const isClickable = index <= currentStepIndex || isComplete}
-							
-							<div class="flex items-center flex-1">
-								<!-- Step Circle -->
-								<button
+
+							<Sidebar.MenuItem>
+								<Sidebar.MenuButton
 									onclick={() => handleStepClick(step.id)}
 									disabled={!isClickable}
-									class="flex flex-col items-center gap-2 group {isClickable ? 'cursor-pointer' : 'cursor-not-allowed'}"
+									class="w-full {isCurrent ? 'bg-sidebar-accent text-sidebar-accent-foreground' : ''}"
 								>
-									<div
-										class="w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all
-											{isCurrent
-												? 'border-primary bg-primary text-primary-foreground'
-												: isComplete
-													? 'border-primary bg-primary text-primary-foreground'
-													: 'border-muted bg-background text-muted-foreground'}
-											{isClickable && !isCurrent ? 'group-hover:border-primary/50' : ''}"
-									>
+									<!-- Step Indicator -->
+									<div class="flex-shrink-0">
 										{#if isComplete}
-											<Check class="w-5 h-5" />
+											<div class="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center">
+												<Check class="w-4 h-4 text-white" />
+											</div>
+										{:else if isCurrent}
+											<div class="w-6 h-6 rounded-full bg-foreground text-background flex items-center justify-center">
+												<span class="text-xs font-semibold">{step.order}</span>
+											</div>
 										{:else}
-											<span class="text-sm font-medium">{step.order}</span>
+											<div class="w-6 h-6 rounded-full border-2 border-muted-foreground/30 flex items-center justify-center">
+												<span class="text-xs font-medium">{step.order}</span>
+											</div>
 										{/if}
 									</div>
-									<div class="text-center max-w-[120px]">
-										<p class="text-xs font-medium {isCurrent ? 'text-foreground' : 'text-muted-foreground'}">
-											{step.title}
-										</p>
-									</div>
-								</button>
 
-								<!-- Connector Line -->
-								{#if index < WIZARD_STEPS.length - 1}
-									<div
-										class="flex-1 h-0.5 mx-2 transition-colors
-											{isComplete ? 'bg-primary' : 'bg-muted'}"
-									></div>
-								{/if}
-							</div>
+									<!-- Step Title -->
+									<span class="text-sm font-medium flex-1">
+										{step.title || `Step ${step.order}`}
+									</span>
+
+									<!-- Current Step Indicator -->
+									{#if isCurrent}
+										<ChevronRight class="w-4 h-4 flex-shrink-0" />
+									{/if}
+								</Sidebar.MenuButton>
+							</Sidebar.MenuItem>
 						{/each}
-					</div>
-				</Card.Content>
-			</Card.Root>
+					</Sidebar.Menu>
+				</Sidebar.GroupContent>
+			</Sidebar.Group>
+		</Sidebar.Content>
+	</Sidebar.Root>
 
-			<!-- Current Step Content -->
-			<Card.Root>
-				<Card.Header>
-					<div class="flex items-center justify-between">
-						<div>
-							<Card.Title>{currentStepConfig.title}</Card.Title>
-							<Card.Description>{currentStepConfig.description}</Card.Description>
+	<!-- Main Content Area -->
+	<Sidebar.Inset>
+		<div class="flex flex-col min-h-screen">
+			<!-- Top Header -->
+			<header class="border-b bg-background sticky top-0 z-10">
+				<div class="px-8 py-6 flex items-center justify-between">
+					<div class="flex items-center gap-4">
+						<Sidebar.Trigger class="md:hidden" />
+
+						<!-- Step Title and Description -->
+						<div class="flex flex-col">
+							<div class="flex items-center gap-2">
+								<h1 class="text-2xl font-bold tracking-tight text-foreground">
+									{currentStepConfig.title}
+								</h1>
+
+								<!-- Info Tooltip -->
+								<Tooltip.Root>
+									<Tooltip.Trigger>
+										<div class="p-1 hover:bg-muted rounded-md transition-colors">
+											<Info class="h-4 w-4 text-muted-foreground" />
+										</div>
+									</Tooltip.Trigger>
+									<Tooltip.Content class="max-w-sm">
+										<div class="space-y-1">
+											<div class="font-semibold">Step {currentStepConfig.order} of {WIZARD_STEPS.length}</div>
+											<p class="opacity-70 leading-relaxed">{currentStepConfig.description}</p>
+										</div>
+									</Tooltip.Content>
+								</Tooltip.Root>
+							</div>
+
+							{#if currentStepConfig.description}
+								<p class="text-sm text-muted-foreground mt-0.5">
+									{currentStepConfig.description}
+								</p>
+							{/if}
 						</div>
-						<Badge variant="outline">
-							Step {currentStepConfig.order} of {WIZARD_STEPS.length}
-						</Badge>
 					</div>
-				</Card.Header>
-				<Card.Content>
-					<!-- Step Content Slot -->
-					{@render children()}
-				</Card.Content>
-				<Card.Footer class="flex justify-between">
-					<Button
-						variant="outline"
-						onclick={handlePrevious}
-						disabled={!canGoPrevious}
-					>
-						Previous
+
+					<Button variant="ghost" size="icon" href="/">
+						<X class="w-5 h-5" />
 					</Button>
-					<Button
-						onclick={handleNext}
-						disabled={!canGoNext}
-					>
-						{isLastStep ? 'Finish' : 'Next'}
-					</Button>
-				</Card.Footer>
-			</Card.Root>
+				</div>
+			</header>
+
+			<!-- Main Content -->
+			<main class="flex-1 overflow-auto flex items-center">
+				<div class="max-w-4xl mx-auto px-8 py-8 w-full">
+					<!-- Step Header: Exibe o número do passo, título e descrição de forma centralizada -->
+					<!-- <div class="mb-10 text-center"> -->
+						<!-- Indicador numérico do passo atual (círculo com número) -->
+						<!-- <div class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-foreground text-background mb-4">
+							<span class="text-sm font-bold">{currentStepConfig.order}</span>
+						</div> -->
+						<!-- Título do passo (ex: "Configure Organizations") -->
+						<!-- {#if currentStepConfig.title}
+							<h2 class="text-xl font-bold tracking-tight mb-2">{currentStepConfig.title}</h2>
+						{/if} -->
+						<!-- Descrição do passo (ex: "Connect your source and target Salesforce organizations") -->
+						<!-- {#if currentStepConfig.description}
+							<p class="text-muted-foreground text-sm">{currentStepConfig.description}</p>
+						{/if} -->
+					<!-- </div> -->
+
+					<!-- Step Content -->
+					<div class="space-y-6">
+						{@render children()}
+					</div>
+
+					<!-- Navigation Footer -->
+					<div class="mt-12 pt-6 border-t flex items-center justify-between">
+						<Button
+							variant="outline"
+							onclick={handlePrevious}
+							disabled={!canGoPrevious}
+						>
+							Previous
+						</Button>
+						<Button
+							onclick={handleNext}
+							disabled={!canGoNext}
+						>
+							{isLastStep ? 'Finish' : 'Next'}
+						</Button>
+					</div>
+				</div>
+			</main>
 		</div>
-	</div>
-</div>
+	</Sidebar.Inset>
+</Sidebar.Provider>
 

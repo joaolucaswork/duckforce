@@ -112,6 +112,7 @@ export interface SalesforceOrg {
 	instanceUrl: string;
 	orgType: 'production' | 'sandbox' | 'developer' | 'scratch';
 	apiVersion: string;
+	color?: string; // Custom color for visual identification
 }
 
 // Dependency Graph

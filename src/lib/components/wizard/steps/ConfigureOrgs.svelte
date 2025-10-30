@@ -1,0 +1,602 @@
+<script lang="ts">
+	import { wizardStore } from '$lib/stores/wizard.svelte';
+	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
+	import { Label } from '$lib/components/ui/label';
+	import * as Alert from '$lib/components/ui/alert';
+	import * as Card from '$lib/components/ui/card';
+	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import * as Select from '$lib/components/ui/select';
+	import * as Tooltip from '$lib/components/ui/tooltip';
+	import { AlertCircle, Loader2, MoreVertical, ArrowRight, Info } from '@lucide/svelte';
+	import type { SalesforceOrg } from '$lib/types/salesforce';
+
+	// Preset Color Palette - Professional, muted tones with better contrast
+	const COLOR_PALETTE = [
+		{ name: 'Blue', value: '#2563eb' },      // Tailwind blue-600 (darker)
+		{ name: 'Emerald', value: '#059669' },   // Tailwind emerald-600 (darker)
+		{ name: 'Violet', value: '#7c3aed' },    // Tailwind violet-600 (darker)
+		{ name: 'Amber', value: '#d97706' },     // Tailwind amber-600 (darker)
+		{ name: 'Rose', value: '#e11d48' },      // Tailwind rose-600 (darker)
+		{ name: 'Cyan', value: '#0891b2' }       // Tailwind cyan-600 (darker)
+	];
+
+	// Source Org State
+	let sourceOrgName = $state('');
+	let sourceInstanceUrl = $state('');
+	let sourceOrgType = $state<'production' | 'sandbox' | 'developer' | 'scratch'>('production');
+	let sourceApiVersion = $state('60.0');
+	let sourceColor = $state('#2563eb'); // Default blue-600
+	let sourceNameEditing = $state(false);
+	let sourceOrgNameManuallyEdited = $state(false); // Track if user manually edited the name
+
+	// Target Org State
+	let targetOrgName = $state('');
+	let targetInstanceUrl = $state('');
+	let targetOrgType = $state<'production' | 'sandbox' | 'developer' | 'scratch'>('sandbox');
+	let targetApiVersion = $state('60.0');
+	let targetColor = $state('#059669'); // Default emerald-600
+	let targetNameEditing = $state(false);
+	let targetOrgNameManuallyEdited = $state(false); // Track if user manually edited the name
+
+	/**
+	 * Extract organization name from a Salesforce instance URL
+	 * Handles various URL formats:
+	 * - https://mycompany.my.salesforce.com -> mycompany
+	 * - https://mycompany--uat.sandbox.my.salesforce.com -> mycompany--uat
+	 * - mycompany.my.salesforce.com -> mycompany
+	 * - www.mycompany.salesforce.com -> mycompany
+	 */
+	function extractOrgNameFromUrl(url: string): string {
+		if (!url || url.trim() === '') return '';
+
+		try {
+			// Remove protocol if present
+			let cleanUrl = url.trim().replace(/^https?:\/\//, '');
+
+			// Remove www. if present
+			cleanUrl = cleanUrl.replace(/^www\./, '');
+
+			// Split by dots to get the first segment
+			const parts = cleanUrl.split('.');
+
+			if (parts.length > 0 && parts[0]) {
+				// Return the first segment (subdomain/org name)
+				return parts[0];
+			}
+		} catch (error) {
+			// If parsing fails, return empty string
+			console.error('Error extracting org name from URL:', error);
+		}
+
+		return '';
+	}
+
+	// Auto-extract source org name from URL
+	$effect(() => {
+		// Only auto-fill if the name hasn't been manually edited and is currently empty
+		if (!sourceOrgNameManuallyEdited && sourceInstanceUrl && !sourceOrgName) {
+			const extractedName = extractOrgNameFromUrl(sourceInstanceUrl);
+			if (extractedName) {
+				sourceOrgName = extractedName;
+			}
+		}
+	});
+
+	// Auto-extract target org name from URL
+	$effect(() => {
+		// Only auto-fill if the name hasn't been manually edited and is currently empty
+		if (!targetOrgNameManuallyEdited && targetInstanceUrl && !targetOrgName) {
+			const extractedName = extractOrgNameFromUrl(targetInstanceUrl);
+			if (extractedName) {
+				targetOrgName = extractedName;
+			}
+		}
+	});
+
+	const sourceIsConnected = $derived(wizardStore.state.sourceOrg.isConnected);
+	const sourceIsConnecting = $derived(wizardStore.state.sourceOrg.isConnecting);
+	const sourceError = $derived(wizardStore.state.sourceOrg.error);
+	const sourceConnectedOrg = $derived(wizardStore.state.sourceOrg.org);
+
+	const targetIsConnected = $derived(wizardStore.state.targetOrg.isConnected);
+	const targetIsConnecting = $derived(wizardStore.state.targetOrg.isConnecting);
+	const targetError = $derived(wizardStore.state.targetOrg.error);
+	const targetConnectedOrg = $derived(wizardStore.state.targetOrg.org);
+
+	// Mock connection function for source org
+	async function handleConnectSource() {
+		if (!sourceInstanceUrl) {
+			wizardStore.setSourceOrgError('Please fill in all required fields');
+			return;
+		}
+
+		// Use a default name if not provided
+		const orgName = sourceOrgName || 'Source Organization';
+
+		wizardStore.setSourceOrgConnecting(true);
+
+		// Simulate API call
+		await new Promise(resolve => setTimeout(resolve, 1500));
+
+		try {
+			const org: SalesforceOrg = {
+				id: `org-${Date.now()}`,
+				name: orgName,
+				instanceUrl: sourceInstanceUrl,
+				orgType: sourceOrgType,
+				apiVersion: sourceApiVersion,
+				color: sourceColor
+			};
+
+			wizardStore.setSourceOrg(org, 'mock-access-token', sourceInstanceUrl);
+			// Update the local name if it was empty
+			if (!sourceOrgName) {
+				sourceOrgName = orgName;
+			}
+		} catch (err) {
+			wizardStore.setSourceOrgError('Failed to connect to Salesforce org');
+		}
+	}
+
+	// Mock connection function for target org
+	async function handleConnectTarget() {
+		if (!targetInstanceUrl) {
+			wizardStore.setTargetOrgError('Please fill in all required fields');
+			return;
+		}
+
+		// Use a default name if not provided
+		const orgName = targetOrgName || 'Destination Organization';
+
+		wizardStore.setTargetOrgConnecting(true);
+
+		// Simulate API call
+		await new Promise(resolve => setTimeout(resolve, 1500));
+
+		try {
+			const org: SalesforceOrg = {
+				id: `org-${Date.now()}`,
+				name: orgName,
+				instanceUrl: targetInstanceUrl,
+				orgType: targetOrgType,
+				apiVersion: targetApiVersion,
+				color: targetColor
+			};
+
+			wizardStore.setTargetOrg(org, 'mock-access-token', targetInstanceUrl);
+			// Update the local name if it was empty
+			if (!targetOrgName) {
+				targetOrgName = orgName;
+			}
+		} catch (err) {
+			wizardStore.setTargetOrgError('Failed to connect to Salesforce org');
+		}
+	}
+
+	function handleDisconnectSource() {
+		wizardStore.setSourceOrgConnecting(false);
+		wizardStore.state.sourceOrg = {
+			org: null,
+			isConnected: false,
+			isConnecting: false,
+			error: null
+		};
+		sourceOrgName = '';
+		sourceInstanceUrl = '';
+		sourceOrgType = 'production';
+		sourceApiVersion = '60.0';
+		sourceColor = '#2563eb'; // Default blue-600
+		sourceOrgNameManuallyEdited = false; // Reset manual edit flag
+	}
+
+	function handleDisconnectTarget() {
+		wizardStore.setTargetOrgConnecting(false);
+		wizardStore.state.targetOrg = {
+			org: null,
+			isConnected: false,
+			isConnecting: false,
+			error: null
+		};
+		targetOrgName = '';
+		targetInstanceUrl = '';
+		targetOrgType = 'sandbox';
+		targetApiVersion = '60.0';
+		targetColor = '#059669'; // Default emerald-600
+		targetOrgNameManuallyEdited = false; // Reset manual edit flag
+	}
+</script>
+
+<div class="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] gap-6 items-center">
+	<!-- Source Organization -->
+	<Card.Root class="shadow-none">
+		{#if !sourceIsConnected}
+			<Card.Header>
+				<div class="flex items-center justify-between">
+					<div class="flex-1">
+						{#if sourceOrgName}
+							{#if sourceNameEditing}
+								<Input
+									bind:value={sourceOrgName}
+									placeholder="Enter organization name"
+									class="text-lg font-semibold h-auto px-0 border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+									oninput={() => {
+										// Mark as manually edited when user types
+										sourceOrgNameManuallyEdited = true;
+									}}
+									onkeydown={(e) => {
+										if (e.key === 'Enter') {
+											sourceNameEditing = false;
+										}
+									}}
+									onblur={() => sourceNameEditing = false}
+									autofocus
+								/>
+							{:else}
+								<button
+									onclick={() => sourceNameEditing = true}
+									class="text-lg font-semibold text-left hover:text-muted-foreground transition-colors"
+								>
+									{sourceOrgName}
+								</button>
+								<Card.Description>Source</Card.Description>
+							{/if}
+						{:else}
+							<Card.Description>Source</Card.Description>
+						{/if}
+					</div>
+					<DropdownMenu.Root>
+						<DropdownMenu.Trigger>
+							{#snippet child({ props })}
+								<Button {...props} variant="ghost" size="icon" class="h-8 w-8">
+									<MoreVertical class="h-4 w-4" />
+									<span class="sr-only">Open menu</span>
+								</Button>
+							{/snippet}
+						</DropdownMenu.Trigger>
+						<DropdownMenu.Content align="end" class="w-56">
+							<DropdownMenu.Label>Advanced Options</DropdownMenu.Label>
+							<DropdownMenu.Separator />
+
+							<!-- API Version -->
+							<div class="px-2 py-2">
+								<Label for="source-api-version-menu" class="text-xs text-muted-foreground">API Version</Label>
+								<Input
+									id="source-api-version-menu"
+									bind:value={sourceApiVersion}
+									placeholder="60.0"
+									disabled={sourceIsConnecting}
+									class="mt-1.5 h-8"
+								/>
+							</div>
+						</DropdownMenu.Content>
+					</DropdownMenu.Root>
+				</div>
+			</Card.Header>
+		{/if}
+		<Card.Content>
+			{#if sourceIsConnected && sourceConnectedOrg}
+				<!-- Connected State -->
+				<div class="space-y-6">
+					<!-- Header Section with Org Info (integrated with card) -->
+					<div
+						class="-mx-6 -mt-6 rounded-t-xl px-6 py-5 flex items-start justify-between text-white"
+						style="background-color: {sourceColor};"
+					>
+						<div class="flex-1 space-y-1">
+							<!-- Org Name -->
+							<h2 class="text-xl font-semibold tracking-tight">
+								{sourceConnectedOrg.name}
+							</h2>
+							<!-- Org Type -->
+							<p class="text-sm opacity-90 capitalize">
+								{sourceConnectedOrg.orgType}
+							</p>
+						</div>
+
+						<!-- Info Icon with Tooltip -->
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<div class="p-1.5 hover:bg-white/10 rounded-md transition-colors">
+									<Info class="h-4 w-4 opacity-90" />
+								</div>
+							</Tooltip.Trigger>
+							<Tooltip.Content side="left" class="max-w-xs">
+								<div class="space-y-2 text-xs">
+									<div><strong>Instance URL:</strong><br/>{sourceConnectedOrg.instanceUrl}</div>
+									<div><strong>API Version:</strong> {sourceConnectedOrg.apiVersion}</div>
+								</div>
+							</Tooltip.Content>
+						</Tooltip.Root>
+					</div>
+
+					<!-- Action Buttons -->
+					<div class="flex gap-3">
+						<Button variant="secondary" class="flex-1">
+							View Details
+						</Button>
+						<Button variant="outline" onclick={handleDisconnectSource}>
+							Disconnect
+						</Button>
+					</div>
+				</div>
+			{:else}
+				<!-- Connection Form -->
+				<div class="space-y-6">
+					<div class="space-y-3">
+						<Label for="source-instance-url">Instance URL *</Label>
+						<Input
+							id="source-instance-url"
+							bind:value={sourceInstanceUrl}
+							placeholder="e.g., https://mycompany.my.salesforce.com"
+							disabled={sourceIsConnecting}
+						/>
+					</div>
+
+					<div class="space-y-3">
+						<Label for="source-org-type">Organization Type</Label>
+						<Select.Root
+							type="single"
+							bind:value={sourceOrgType}
+							disabled={sourceIsConnecting}
+							onValueChange={(v) => {
+								if (v) sourceOrgType = v as 'production' | 'sandbox' | 'developer' | 'scratch';
+							}}
+						>
+							<Select.Trigger id="source-org-type" class="w-full">
+								{sourceOrgType ? sourceOrgType.charAt(0).toUpperCase() + sourceOrgType.slice(1) : 'Select org type'}
+							</Select.Trigger>
+							<Select.Content>
+								<Select.Item value="production">Production</Select.Item>
+								<Select.Item value="sandbox">Sandbox</Select.Item>
+								<Select.Item value="developer">Developer</Select.Item>
+								<Select.Item value="scratch">Scratch Org</Select.Item>
+							</Select.Content>
+						</Select.Root>
+					</div>
+
+					<div class="space-y-3">
+						<Label>Organization Color</Label>
+						<div class="flex gap-2">
+							{#each COLOR_PALETTE as color}
+								<button
+									type="button"
+									onclick={() => sourceColor = color.value}
+									disabled={sourceIsConnecting}
+									class="w-10 h-10 rounded-lg border-2 transition-all hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed"
+									class:border-foreground={sourceColor === color.value}
+									class:border-transparent={sourceColor !== color.value}
+									style="background-color: {color.value};"
+									title={color.name}
+								>
+									<span class="sr-only">{color.name}</span>
+								</button>
+							{/each}
+						</div>
+					</div>
+
+					{#if sourceError}
+						<Alert.Root variant="destructive">
+							<AlertCircle class="h-4 w-4" />
+							<Alert.Title>Connection Failed</Alert.Title>
+							<Alert.Description>{sourceError}</Alert.Description>
+						</Alert.Root>
+					{/if}
+
+					<Button
+						onclick={handleConnectSource}
+						disabled={sourceIsConnecting || !sourceInstanceUrl}
+						class="w-full"
+					>
+						{#if sourceIsConnecting}
+							<Loader2 class="mr-2 h-4 w-4 animate-spin" />
+							Connecting...
+						{:else}
+							Connect Source Org
+						{/if}
+					</Button>
+				</div>
+			{/if}
+		</Card.Content>
+	</Card.Root>
+
+	<!-- Arrow Separator -->
+	<div class="hidden lg:flex items-center justify-center">
+		<div class="flex items-center justify-center w-12 h-12 rounded-full bg-muted text-muted-foreground">
+			<ArrowRight class="h-6 w-6" />
+		</div>
+	</div>
+
+	<!-- Destination Organization -->
+	<Card.Root class="shadow-none">
+		{#if !targetIsConnected}
+			<Card.Header>
+				<div class="flex items-center justify-between">
+					<div class="flex-1">
+						{#if targetOrgName}
+							{#if targetNameEditing}
+								<Input
+									bind:value={targetOrgName}
+									placeholder="Enter organization name"
+									class="text-lg font-semibold h-auto px-0 border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+									oninput={() => {
+										// Mark as manually edited when user types
+										targetOrgNameManuallyEdited = true;
+									}}
+									onkeydown={(e) => {
+										if (e.key === 'Enter') {
+											targetNameEditing = false;
+										}
+									}}
+									onblur={() => targetNameEditing = false}
+									autofocus
+								/>
+							{:else}
+								<button
+									onclick={() => targetNameEditing = true}
+									class="text-lg font-semibold text-left hover:text-muted-foreground transition-colors"
+								>
+									{targetOrgName}
+								</button>
+								<Card.Description>Destination</Card.Description>
+							{/if}
+						{:else}
+							<Card.Description>Destination</Card.Description>
+						{/if}
+					</div>
+					<DropdownMenu.Root>
+						<DropdownMenu.Trigger>
+							{#snippet child({ props })}
+								<Button {...props} variant="ghost" size="icon" class="h-8 w-8">
+									<MoreVertical class="h-4 w-4" />
+									<span class="sr-only">Open menu</span>
+								</Button>
+							{/snippet}
+						</DropdownMenu.Trigger>
+						<DropdownMenu.Content align="end" class="w-56">
+							<DropdownMenu.Label>Advanced Options</DropdownMenu.Label>
+							<DropdownMenu.Separator />
+
+							<!-- API Version -->
+							<div class="px-2 py-2">
+								<Label for="target-api-version-menu" class="text-xs text-muted-foreground">API Version</Label>
+								<Input
+									id="target-api-version-menu"
+									bind:value={targetApiVersion}
+									placeholder="60.0"
+									disabled={targetIsConnecting}
+									class="mt-1.5 h-8"
+								/>
+							</div>
+						</DropdownMenu.Content>
+					</DropdownMenu.Root>
+				</div>
+			</Card.Header>
+		{/if}
+		<Card.Content>
+			{#if targetIsConnected && targetConnectedOrg}
+				<!-- Connected State -->
+				<div class="space-y-6">
+					<!-- Header Section with Org Info (integrated with card) -->
+					<div
+						class="-mx-6 -mt-6 rounded-t-xl px-6 py-5 flex items-start justify-between text-white"
+						style="background-color: {targetColor};"
+					>
+						<div class="flex-1 space-y-1">
+							<!-- Org Name -->
+							<h2 class="text-xl font-semibold tracking-tight">
+								{targetConnectedOrg.name}
+							</h2>
+							<!-- Org Type -->
+							<p class="text-sm opacity-90 capitalize">
+								{targetConnectedOrg.orgType}
+							</p>
+						</div>
+
+						<!-- Info Icon with Tooltip -->
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<div class="p-1.5 hover:bg-white/10 rounded-md transition-colors">
+									<Info class="h-4 w-4 opacity-90" />
+								</div>
+							</Tooltip.Trigger>
+							<Tooltip.Content side="left" class="max-w-xs">
+								<div class="space-y-2 text-xs">
+									<div><strong>Instance URL:</strong><br/>{targetConnectedOrg.instanceUrl}</div>
+									<div><strong>API Version:</strong> {targetConnectedOrg.apiVersion}</div>
+								</div>
+							</Tooltip.Content>
+						</Tooltip.Root>
+					</div>
+
+					<!-- Action Buttons -->
+					<div class="flex gap-3">
+						<Button variant="secondary" class="flex-1">
+							View Details
+						</Button>
+						<Button variant="outline" onclick={handleDisconnectTarget}>
+							Disconnect
+						</Button>
+					</div>
+				</div>
+			{:else}
+				<!-- Connection Form -->
+				<div class="space-y-6">
+					<div class="space-y-3">
+						<Label for="target-instance-url">Instance URL *</Label>
+						<Input
+							id="target-instance-url"
+							bind:value={targetInstanceUrl}
+							placeholder="e.g., https://mycompany--uat.sandbox.my.salesforce.com"
+							disabled={targetIsConnecting}
+						/>
+					</div>
+
+					<div class="space-y-3">
+						<Label for="target-org-type">Organization Type</Label>
+						<Select.Root
+							type="single"
+							bind:value={targetOrgType}
+							disabled={targetIsConnecting}
+							onValueChange={(v) => {
+								if (v) targetOrgType = v as 'production' | 'sandbox' | 'developer' | 'scratch';
+							}}
+						>
+							<Select.Trigger id="target-org-type" class="w-full">
+								{targetOrgType ? targetOrgType.charAt(0).toUpperCase() + targetOrgType.slice(1) : 'Select org type'}
+							</Select.Trigger>
+							<Select.Content>
+								<Select.Item value="production">Production</Select.Item>
+								<Select.Item value="sandbox">Sandbox</Select.Item>
+								<Select.Item value="developer">Developer</Select.Item>
+								<Select.Item value="scratch">Scratch Org</Select.Item>
+							</Select.Content>
+						</Select.Root>
+					</div>
+
+					<div class="space-y-3">
+						<Label>Organization Color</Label>
+						<div class="flex gap-2">
+							{#each COLOR_PALETTE as color}
+								<button
+									type="button"
+									onclick={() => targetColor = color.value}
+									disabled={targetIsConnecting}
+									class="w-10 h-10 rounded-lg border-2 transition-all hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed"
+									class:border-foreground={targetColor === color.value}
+									class:border-transparent={targetColor !== color.value}
+									style="background-color: {color.value};"
+									title={color.name}
+								>
+									<span class="sr-only">{color.name}</span>
+								</button>
+							{/each}
+						</div>
+					</div>
+
+					{#if targetError}
+						<Alert.Root variant="destructive">
+							<AlertCircle class="h-4 w-4" />
+							<Alert.Title>Connection Failed</Alert.Title>
+							<Alert.Description>{targetError}</Alert.Description>
+						</Alert.Root>
+					{/if}
+
+					<Button
+						onclick={handleConnectTarget}
+						disabled={targetIsConnecting || !targetInstanceUrl}
+						class="w-full"
+					>
+						{#if targetIsConnecting}
+							<Loader2 class="mr-2 h-4 w-4 animate-spin" />
+							Connecting...
+						{:else}
+							Connect Destination Org
+						{/if}
+					</Button>
+				</div>
+			{/if}
+		</Card.Content>
+	</Card.Root>
+</div>
+
