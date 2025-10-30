@@ -7,6 +7,7 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import * as Card from '$lib/components/ui/card';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import * as Select from '$lib/components/ui/select';
 	import { CheckCircle2, AlertCircle, Loader2, MoreVertical, ArrowRight } from '@lucide/svelte';
 	import type { SalesforceOrg } from '$lib/types/salesforce';
 
@@ -17,6 +18,7 @@
 	let sourceApiVersion = $state('60.0');
 	let sourceColor = $state('#3b82f6'); // Default blue
 	let sourceNameEditing = $state(false);
+	let sourceOrgNameManuallyEdited = $state(false); // Track if user manually edited the name
 
 	// Target Org State
 	let targetOrgName = $state('');
@@ -25,6 +27,62 @@
 	let targetApiVersion = $state('60.0');
 	let targetColor = $state('#10b981'); // Default green
 	let targetNameEditing = $state(false);
+	let targetOrgNameManuallyEdited = $state(false); // Track if user manually edited the name
+
+	/**
+	 * Extract organization name from a Salesforce instance URL
+	 * Handles various URL formats:
+	 * - https://mycompany.my.salesforce.com -> mycompany
+	 * - https://mycompany--uat.sandbox.my.salesforce.com -> mycompany--uat
+	 * - mycompany.my.salesforce.com -> mycompany
+	 * - www.mycompany.salesforce.com -> mycompany
+	 */
+	function extractOrgNameFromUrl(url: string): string {
+		if (!url || url.trim() === '') return '';
+
+		try {
+			// Remove protocol if present
+			let cleanUrl = url.trim().replace(/^https?:\/\//, '');
+
+			// Remove www. if present
+			cleanUrl = cleanUrl.replace(/^www\./, '');
+
+			// Split by dots to get the first segment
+			const parts = cleanUrl.split('.');
+
+			if (parts.length > 0 && parts[0]) {
+				// Return the first segment (subdomain/org name)
+				return parts[0];
+			}
+		} catch (error) {
+			// If parsing fails, return empty string
+			console.error('Error extracting org name from URL:', error);
+		}
+
+		return '';
+	}
+
+	// Auto-extract source org name from URL
+	$effect(() => {
+		// Only auto-fill if the name hasn't been manually edited and is currently empty
+		if (!sourceOrgNameManuallyEdited && sourceInstanceUrl && !sourceOrgName) {
+			const extractedName = extractOrgNameFromUrl(sourceInstanceUrl);
+			if (extractedName) {
+				sourceOrgName = extractedName;
+			}
+		}
+	});
+
+	// Auto-extract target org name from URL
+	$effect(() => {
+		// Only auto-fill if the name hasn't been manually edited and is currently empty
+		if (!targetOrgNameManuallyEdited && targetInstanceUrl && !targetOrgName) {
+			const extractedName = extractOrgNameFromUrl(targetInstanceUrl);
+			if (extractedName) {
+				targetOrgName = extractedName;
+			}
+		}
+	});
 
 	const sourceIsConnected = $derived(wizardStore.state.sourceOrg.isConnected);
 	const sourceIsConnecting = $derived(wizardStore.state.sourceOrg.isConnecting);
@@ -118,7 +176,8 @@
 		sourceInstanceUrl = '';
 		sourceOrgType = 'production';
 		sourceApiVersion = '60.0';
-		sourceColor = '#3b82f6';
+		sourceColor = '#3b82f6'; // Default blue
+		sourceOrgNameManuallyEdited = false; // Reset manual edit flag
 	}
 
 	function handleDisconnectTarget() {
@@ -133,7 +192,8 @@
 		targetInstanceUrl = '';
 		targetOrgType = 'sandbox';
 		targetApiVersion = '60.0';
-		targetColor = '#10b981';
+		targetColor = '#10b981'; // Default green
+		targetOrgNameManuallyEdited = false; // Reset manual edit flag
 	}
 </script>
 
@@ -146,26 +206,34 @@
 					{#if sourceIsConnected && sourceConnectedOrg}
 						<Card.Title>{sourceConnectedOrg.name}</Card.Title>
 						<Card.Description>Source</Card.Description>
-					{:else if sourceNameEditing}
-						<Input
-							bind:value={sourceOrgName}
-							placeholder="Enter organization name"
-							class="text-lg font-semibold h-auto px-0 border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
-							onkeydown={(e) => {
-								if (e.key === 'Enter') {
-									sourceNameEditing = false;
-								}
-							}}
-							onblur={() => sourceNameEditing = false}
-							autofocus
-						/>
+					{:else if sourceOrgName}
+						{#if sourceNameEditing}
+							<Input
+								bind:value={sourceOrgName}
+								placeholder="Enter organization name"
+								class="text-lg font-semibold h-auto px-0 border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+								oninput={() => {
+									// Mark as manually edited when user types
+									sourceOrgNameManuallyEdited = true;
+								}}
+								onkeydown={(e) => {
+									if (e.key === 'Enter') {
+										sourceNameEditing = false;
+									}
+								}}
+								onblur={() => sourceNameEditing = false}
+								autofocus
+							/>
+						{:else}
+							<button
+								onclick={() => sourceNameEditing = true}
+								class="text-lg font-semibold text-left hover:text-muted-foreground transition-colors"
+							>
+								{sourceOrgName}
+							</button>
+							<Card.Description>Source</Card.Description>
+						{/if}
 					{:else}
-						<button
-							onclick={() => sourceNameEditing = true}
-							class="text-lg font-semibold text-left hover:text-muted-foreground transition-colors"
-						>
-							{sourceOrgName || 'Click to name organization'}
-						</button>
 						<Card.Description>Source</Card.Description>
 					{/if}
 				</div>
@@ -180,27 +248,6 @@
 					</DropdownMenu.Trigger>
 					<DropdownMenu.Content align="end" class="w-56">
 						<DropdownMenu.Label>Advanced Options</DropdownMenu.Label>
-						<DropdownMenu.Separator />
-
-						<!-- Org Type Selection -->
-						<div class="px-2 py-2">
-							<Label class="text-xs text-muted-foreground">Org Type</Label>
-						</div>
-						<DropdownMenu.RadioGroup bind:value={sourceOrgType}>
-							<DropdownMenu.RadioItem value="production" disabled={sourceIsConnecting}>
-								Production
-							</DropdownMenu.RadioItem>
-							<DropdownMenu.RadioItem value="sandbox" disabled={sourceIsConnecting}>
-								Sandbox
-							</DropdownMenu.RadioItem>
-							<DropdownMenu.RadioItem value="developer" disabled={sourceIsConnecting}>
-								Developer
-							</DropdownMenu.RadioItem>
-							<DropdownMenu.RadioItem value="scratch" disabled={sourceIsConnecting}>
-								Scratch Org
-							</DropdownMenu.RadioItem>
-						</DropdownMenu.RadioGroup>
-
 						<DropdownMenu.Separator />
 
 						<!-- API Version -->
@@ -272,11 +319,37 @@
 					</div>
 
 					<div class="space-y-2">
+						<Label for="source-org-type">Organization Type</Label>
+						<Select.Root
+							type="single"
+							bind:value={sourceOrgType}
+							disabled={sourceIsConnecting}
+							onValueChange={(v) => {
+								if (v) sourceOrgType = v as 'production' | 'sandbox' | 'developer' | 'scratch';
+							}}
+						>
+							<Select.Trigger id="source-org-type" class="w-full">
+								{sourceOrgType ? sourceOrgType.charAt(0).toUpperCase() + sourceOrgType.slice(1) : 'Select org type'}
+							</Select.Trigger>
+							<Select.Content>
+								<Select.Item value="production">Production</Select.Item>
+								<Select.Item value="sandbox">Sandbox</Select.Item>
+								<Select.Item value="developer">Developer</Select.Item>
+								<Select.Item value="scratch">Scratch Org</Select.Item>
+							</Select.Content>
+						</Select.Root>
+					</div>
+
+					<div class="space-y-2">
 						<Label for="source-color">Organization Color</Label>
 						<input
 							id="source-color"
 							type="color"
-							bind:value={sourceColor}
+							value={sourceColor || '#3b82f6'}
+							oninput={(e) => {
+								const target = e.target as HTMLInputElement;
+								sourceColor = target.value;
+							}}
 							disabled={sourceIsConnecting}
 							class="w-8 h-8 rounded-full cursor-pointer border-0 p-0 overflow-hidden"
 							style="appearance: none; -webkit-appearance: none; -moz-appearance: none;"
@@ -323,26 +396,34 @@
 					{#if targetIsConnected && targetConnectedOrg}
 						<Card.Title>{targetConnectedOrg.name}</Card.Title>
 						<Card.Description>Destination</Card.Description>
-					{:else if targetNameEditing}
-						<Input
-							bind:value={targetOrgName}
-							placeholder="Enter organization name"
-							class="text-lg font-semibold h-auto px-0 border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
-							onkeydown={(e) => {
-								if (e.key === 'Enter') {
-									targetNameEditing = false;
-								}
-							}}
-							onblur={() => targetNameEditing = false}
-							autofocus
-						/>
+					{:else if targetOrgName}
+						{#if targetNameEditing}
+							<Input
+								bind:value={targetOrgName}
+								placeholder="Enter organization name"
+								class="text-lg font-semibold h-auto px-0 border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+								oninput={() => {
+									// Mark as manually edited when user types
+									targetOrgNameManuallyEdited = true;
+								}}
+								onkeydown={(e) => {
+									if (e.key === 'Enter') {
+										targetNameEditing = false;
+									}
+								}}
+								onblur={() => targetNameEditing = false}
+								autofocus
+							/>
+						{:else}
+							<button
+								onclick={() => targetNameEditing = true}
+								class="text-lg font-semibold text-left hover:text-muted-foreground transition-colors"
+							>
+								{targetOrgName}
+							</button>
+							<Card.Description>Destination</Card.Description>
+						{/if}
 					{:else}
-						<button
-							onclick={() => targetNameEditing = true}
-							class="text-lg font-semibold text-left hover:text-muted-foreground transition-colors"
-						>
-							{targetOrgName || 'Click to name organization'}
-						</button>
 						<Card.Description>Destination</Card.Description>
 					{/if}
 				</div>
@@ -357,27 +438,6 @@
 					</DropdownMenu.Trigger>
 					<DropdownMenu.Content align="end" class="w-56">
 						<DropdownMenu.Label>Advanced Options</DropdownMenu.Label>
-						<DropdownMenu.Separator />
-
-						<!-- Org Type Selection -->
-						<div class="px-2 py-2">
-							<Label class="text-xs text-muted-foreground">Org Type</Label>
-						</div>
-						<DropdownMenu.RadioGroup bind:value={targetOrgType}>
-							<DropdownMenu.RadioItem value="production" disabled={targetIsConnecting}>
-								Production
-							</DropdownMenu.RadioItem>
-							<DropdownMenu.RadioItem value="sandbox" disabled={targetIsConnecting}>
-								Sandbox
-							</DropdownMenu.RadioItem>
-							<DropdownMenu.RadioItem value="developer" disabled={targetIsConnecting}>
-								Developer
-							</DropdownMenu.RadioItem>
-							<DropdownMenu.RadioItem value="scratch" disabled={targetIsConnecting}>
-								Scratch Org
-							</DropdownMenu.RadioItem>
-						</DropdownMenu.RadioGroup>
-
 						<DropdownMenu.Separator />
 
 						<!-- API Version -->
@@ -449,11 +509,37 @@
 					</div>
 
 					<div class="space-y-2">
+						<Label for="target-org-type">Organization Type</Label>
+						<Select.Root
+							type="single"
+							bind:value={targetOrgType}
+							disabled={targetIsConnecting}
+							onValueChange={(v) => {
+								if (v) targetOrgType = v as 'production' | 'sandbox' | 'developer' | 'scratch';
+							}}
+						>
+							<Select.Trigger id="target-org-type" class="w-full">
+								{targetOrgType ? targetOrgType.charAt(0).toUpperCase() + targetOrgType.slice(1) : 'Select org type'}
+							</Select.Trigger>
+							<Select.Content>
+								<Select.Item value="production">Production</Select.Item>
+								<Select.Item value="sandbox">Sandbox</Select.Item>
+								<Select.Item value="developer">Developer</Select.Item>
+								<Select.Item value="scratch">Scratch Org</Select.Item>
+							</Select.Content>
+						</Select.Root>
+					</div>
+
+					<div class="space-y-2">
 						<Label for="target-color">Organization Color</Label>
 						<input
 							id="target-color"
 							type="color"
-							bind:value={targetColor}
+							value={targetColor || '#10b981'}
+							oninput={(e) => {
+								const target = e.target as HTMLInputElement;
+								targetColor = target.value;
+							}}
 							disabled={targetIsConnecting}
 							class="w-8 h-8 rounded-full cursor-pointer border-0 p-0 overflow-hidden"
 							style="appearance: none; -webkit-appearance: none; -moz-appearance: none;"

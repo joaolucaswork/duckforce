@@ -115,17 +115,23 @@
 
 			<!-- Current Step Content -->
 			<Card.Root>
-				<Card.Header>
-					<div class="flex items-center justify-between">
-						<div>
-							<Card.Title>{currentStepConfig.title}</Card.Title>
-							<Card.Description>{currentStepConfig.description}</Card.Description>
+				{#if currentStepConfig.title || currentStepConfig.description}
+					<Card.Header>
+						<div class="flex items-center justify-between">
+							<div>
+								{#if currentStepConfig.title}
+									<Card.Title>{currentStepConfig.title}</Card.Title>
+								{/if}
+								{#if currentStepConfig.description}
+									<Card.Description>{currentStepConfig.description}</Card.Description>
+								{/if}
+							</div>
+							<Badge variant="outline">
+								Step {currentStepConfig.order} of {WIZARD_STEPS.length}
+							</Badge>
 						</div>
-						<Badge variant="outline">
-							Step {currentStepConfig.order} of {WIZARD_STEPS.length}
-						</Badge>
-					</div>
-				</Card.Header>
+					</Card.Header>
+				{/if}
 				<Card.Content>
 					<!-- Step Content Slot -->
 					{@render children()}

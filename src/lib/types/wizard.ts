@@ -16,8 +16,8 @@ export interface WizardStepConfig {
 export const WIZARD_STEPS: WizardStepConfig[] = [
 	{
 		id: 'configure-orgs',
-		title: 'Configure Organizations',
-		description: 'Configure both source and destination Salesforce organizations',
+		title: '',
+		description: '',
 		order: 1
 	},
 	{
