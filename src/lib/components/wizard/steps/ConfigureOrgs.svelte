@@ -336,10 +336,22 @@
 								>
 									{sourceOrgName}
 								</button>
-								<Card.Description>Source</Card.Description>
+								<Card.Description class="flex items-center gap-2">
+									{#if sourceCustomizationTab !== 'icon'}
+										{@const SourceIconComponent = getIconComponent(sourceIcon)}
+										<SourceIconComponent class="h-4 w-4" style="color: {sourceColor};" />
+									{/if}
+									Source
+								</Card.Description>
 							{/if}
 						{:else}
-							<Card.Description>Source</Card.Description>
+							<Card.Description class="flex items-center gap-2">
+								{#if sourceCustomizationTab !== 'icon'}
+									{@const SourceIconComponent = getIconComponent(sourceIcon)}
+									<SourceIconComponent class="h-4 w-4" style="color: {sourceColor};" />
+								{/if}
+								Source
+							</Card.Description>
 						{/if}
 					</div>
 					<DropdownMenu.Root>
@@ -383,10 +395,12 @@
 							style="background-color: {sourceColor};"
 						>
 							<div class="flex-1 flex items-start gap-3">
-								<!-- Org Icon -->
-								<div class="flex-shrink-0 mt-0.5">
-									<SourceIconComponent class="h-6 w-6 opacity-90" />
-								</div>
+								<!-- Org Icon - Hidden when on Icon tab -->
+								{#if sourceCustomizationTab !== 'icon'}
+									<div class="flex-shrink-0 mt-0.5">
+										<SourceIconComponent class="h-6 w-6 opacity-90" />
+									</div>
+								{/if}
 
 								<div class="flex-1 space-y-1">
 									<!-- Org Name -->
@@ -606,10 +620,22 @@
 								>
 									{targetOrgName}
 								</button>
-								<Card.Description>Destination</Card.Description>
+								<Card.Description class="flex items-center gap-2">
+									{#if targetCustomizationTab !== 'icon'}
+										{@const TargetIconComponent = getIconComponent(targetIcon)}
+										<TargetIconComponent class="h-4 w-4" style="color: {targetColor};" />
+									{/if}
+									Destination
+								</Card.Description>
 							{/if}
 						{:else}
-							<Card.Description>Destination</Card.Description>
+							<Card.Description class="flex items-center gap-2">
+								{#if targetCustomizationTab !== 'icon'}
+									{@const TargetIconComponent = getIconComponent(targetIcon)}
+									<TargetIconComponent class="h-4 w-4" style="color: {targetColor};" />
+								{/if}
+								Destination
+							</Card.Description>
 						{/if}
 					</div>
 					<DropdownMenu.Root>
@@ -653,10 +679,12 @@
 							style="background-color: {targetColor};"
 						>
 							<div class="flex-1 flex items-start gap-3">
-								<!-- Org Icon -->
-								<div class="flex-shrink-0 mt-0.5">
-									<TargetIconComponent class="h-6 w-6 opacity-90" />
-								</div>
+								<!-- Org Icon - Hidden when on Icon tab -->
+								{#if targetCustomizationTab !== 'icon'}
+									<div class="flex-shrink-0 mt-0.5">
+										<TargetIconComponent class="h-6 w-6 opacity-90" />
+									</div>
+								{/if}
 
 								<div class="flex-1 space-y-1">
 									<!-- Org Name -->

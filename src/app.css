@@ -129,3 +129,26 @@
     display: none;
   }
 }
+
+/* Premium sidebar animation - smooth ease similar to ChatGPT */
+[data-slot="sidebar-container"] {
+  transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              right 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              width 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+[data-slot="sidebar-gap"] {
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* Sidebar background opacity animation with delay */
+[data-slot="sidebar-inner"] {
+  transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.05s,
+              background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.05s !important;
+}
+
+/* When sidebar is collapsed, make it transparent */
+[data-state="collapsed"] [data-slot="sidebar-inner"] {
+  opacity: 0;
+  background-color: transparent !important;
+}
