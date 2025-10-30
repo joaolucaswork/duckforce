@@ -5,6 +5,7 @@
 	import * as Sidebar from '$lib/components/ui/sidebar';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { Check, ChevronRight, X, Info } from '@lucide/svelte';
+	import Logo from '$lib/components/Logo.svelte';
 
 	interface Props {
 		children: import('svelte').Snippet;
@@ -111,8 +112,11 @@
 			<!-- Top Header -->
 			<header class="border-b bg-background sticky top-0 z-10">
 				<div class="px-8 py-6 flex items-center justify-between">
-					<div class="flex items-center gap-4">
-						<Sidebar.Trigger class="md:hidden" />
+					<div class="flex items-center gap-6">
+						<!-- Logo -->
+						<a href="/" class="flex-shrink-0">
+							<Logo size="md" showText={false} />
+						</a>
 
 						<!-- Step Title and Description -->
 						<div class="flex flex-col">
@@ -195,5 +199,10 @@
 			</main>
 		</div>
 	</Sidebar.Inset>
+
+	<!-- Floating Sidebar Toggle Button - Bottom Left Corner -->
+	<div class="fixed bottom-6 left-6 z-50">
+		<Sidebar.Trigger class="shadow-lg" />
+	</div>
 </Sidebar.Provider>
 

@@ -8,6 +8,7 @@
 	import { mockProject, calculateMigrationStats } from '$lib/data/mock-data';
 	import type { MigrationProject, MigrationStats, SalesforceComponent, MigrationStatus } from '$lib/types/salesforce';
 	import ComponentDetail from '$lib/components/ComponentDetail.svelte';
+	import Logo from '$lib/components/Logo.svelte';
 
 	let project: MigrationProject = $state(mockProject);
 	let stats: MigrationStats = $derived(calculateMigrationStats(project.components));
@@ -75,10 +76,7 @@
 	<header class="border-b">
 		<div class="container mx-auto px-6 py-4">
 			<div class="flex items-center justify-between">
-				<div>
-					<h1 class="text-2xl font-bold tracking-tight">SalesDuck</h1>
-					<p class="text-sm text-muted-foreground">Salesforce Migration Tracker</p>
-				</div>
+				<Logo size="lg" />
 				<div class="flex items-center gap-4">
 					<Button href="/wizard">
 						New Migration
