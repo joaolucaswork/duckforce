@@ -22,19 +22,25 @@ export async function cacheComponents(
 	organizationId: string,
 	components: Omit<ComponentInsert, 'organization_id'>[]
 ): Promise<void> {
+	console.log(`[DB] Caching ${components.length} components for org ${organizationId}`);
+
 	// First, delete existing components for this org
+	console.log(`[DB] Deleting existing components...`);
 	const { error: deleteError } = await supabaseAdmin
 		.from('salesforce_components')
 		.delete()
 		.eq('organization_id', organizationId);
 
 	if (deleteError) {
-		console.error('Error deleting existing components:', deleteError);
+		console.error('[DB] Error deleting existing components:', deleteError);
 		throw deleteError;
 	}
 
+	console.log(`[DB] Existing components deleted successfully`);
+
 	// Then insert new components if there are any
 	if (components.length > 0) {
+		console.log(`[DB] Inserting ${components.length} new components...`);
 		const { error: insertError } = await supabaseAdmin
 			.from('salesforce_components')
 			.insert(
@@ -54,13 +60,17 @@ export async function cacheComponents(
 			);
 
 		if (insertError) {
-			console.error('Error inserting components:', insertError);
+			console.error('[DB] Error inserting components:', insertError);
 			throw insertError;
 		}
+
+		console.log(`[DB] Components inserted successfully`);
 	}
 
 	// Update last_synced_at for the organization
+	console.log(`[DB] Updating last_synced_at...`);
 	await updateLastSynced(organizationId);
+	console.log(`[DB] Cache complete`);
 }
 
 /**
@@ -270,7 +280,7 @@ export async function deleteAllComponents(organizationId: string): Promise<void>
 
 /**
  * Check if components are cached for an organization
- * 
+ *
  * @param organizationId - The database ID (UUID) of the organization
  * @returns True if components are cached
  */
@@ -286,5 +296,20 @@ export async function hasComponentsCache(organizationId: string): Promise<boolea
 	}
 
 	return (count || 0) > 0;
+}
+
+/**
+ * Save components in batch for an organization
+ *
+ * This is an alias for cacheComponents() to maintain backward compatibility.
+ *
+ * @param organizationId - The database ID (UUID) of the organization
+ * @param components - Array of components to save
+ */
+export async function saveComponentsBatch(
+	organizationId: string,
+	components: Omit<ComponentInsert, 'organization_id'>[]
+): Promise<void> {
+	return cacheComponents(organizationId, components);
 }
 

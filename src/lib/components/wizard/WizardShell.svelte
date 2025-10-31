@@ -4,14 +4,16 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Sidebar from '$lib/components/ui/sidebar';
 	import * as Tooltip from '$lib/components/ui/tooltip';
-	import { Check, ChevronRight, X, Info } from '@lucide/svelte';
+	import { Check, ChevronRight, X, Info, User } from '@lucide/svelte';
 	import Logo from '$lib/components/Logo.svelte';
+	import type { User as SupabaseUser } from '@supabase/supabase-js';
 
 	interface Props {
 		children: import('svelte').Snippet;
+		user: SupabaseUser | null;
 	}
 
-	let { children }: Props = $props();
+	let { children, user }: Props = $props();
 
 	const currentStepIndex = $derived(
 		WIZARD_STEPS.findIndex(s => s.id === wizardStore.state.currentStep)
@@ -104,6 +106,38 @@
 				</Sidebar.GroupContent>
 			</Sidebar.Group>
 		</Sidebar.Content>
+
+		<!-- Sidebar Footer - User Info -->
+		<Sidebar.Footer class="mt-auto border-t border-sidebar-border">
+			{#if user}
+				<div class="flex items-center gap-3 px-3 py-3">
+					<!-- User Avatar -->
+					<div class="flex-shrink-0">
+						{#if user.user_metadata?.avatar_url}
+							<img
+								src={user.user_metadata.avatar_url}
+								alt={user.user_metadata?.full_name || user.email || 'User'}
+								class="w-10 h-10 rounded-full object-cover ring-2 ring-sidebar-border"
+							/>
+						{:else}
+							<div class="w-10 h-10 rounded-full bg-sidebar-accent flex items-center justify-center ring-2 ring-sidebar-border">
+								<User class="w-5 h-5 text-sidebar-accent-foreground" />
+							</div>
+						{/if}
+					</div>
+
+					<!-- User Info -->
+					<div class="flex-1 min-w-0">
+						<p class="text-sm font-medium text-sidebar-foreground truncate">
+							{user.user_metadata?.full_name || user.email?.split('@')[0] || 'User'}
+						</p>
+						<p class="text-xs text-muted-foreground truncate">
+							{user.email || ''}
+						</p>
+					</div>
+				</div>
+			{/if}
+		</Sidebar.Footer>
 	</Sidebar.Root>
 
 	<!-- Main Content Area -->

@@ -5,11 +5,18 @@
 	import SelectComponents from '$lib/components/wizard/steps/SelectComponents.svelte';
 	import ReviewDependencies from '$lib/components/wizard/steps/ReviewDependencies.svelte';
 	import ExecuteMigration from '$lib/components/wizard/steps/ExecuteMigration.svelte';
+	import type { PageData } from './$types';
+
+	interface Props {
+		data: PageData;
+	}
+
+	let { data }: Props = $props();
 
 	const currentStep = $derived(wizardStore.state.currentStep);
 </script>
 
-<WizardShell>
+<WizardShell user={data.user}>
 	{#if currentStep === 'configure-orgs'}
 		<ConfigureOrgs />
 	{:else if currentStep === 'select-components'}

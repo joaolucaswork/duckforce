@@ -173,12 +173,16 @@ class WizardStore {
 	}
 
 	setSelectedSourceOrg(orgId: string | null) {
+		console.log('[WizardStore] setSelectedSourceOrg called with:', orgId);
 		this.state.selectedSourceOrgId = orgId;
+		console.log('[WizardStore] selectedSourceOrgId is now:', this.state.selectedSourceOrgId);
 		this.updateStepCompletion();
 	}
 
 	setSelectedTargetOrg(orgId: string | null) {
+		console.log('[WizardStore] setSelectedTargetOrg called with:', orgId);
 		this.state.selectedTargetOrgId = orgId;
+		console.log('[WizardStore] selectedTargetOrgId is now:', this.state.selectedTargetOrgId);
 		this.updateStepCompletion();
 	}
 

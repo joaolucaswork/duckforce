@@ -105,28 +105,27 @@ export async function fetchApexClasses(conn: Connection): Promise<ComponentInser
 export async function fetchCustomObjects(conn: Connection): Promise<ComponentInsert[]> {
 	try {
 		console.log('[Salesforce] Fetching Custom Objects...');
-		
+
 		// Query custom objects using Tooling API
+		// Note: CustomObject doesn't have MasterLabel field, only DeveloperName
 		const result = await conn.tooling.query(
-			`SELECT Id, DeveloperName, NamespacePrefix, Label, PluralLabel, Description
-			 FROM CustomObject 
+			`SELECT Id, DeveloperName, NamespacePrefix, Description
+			 FROM CustomObject
 			 WHERE ManageableState IN ('unmanaged', 'installed')
 			 ORDER BY DeveloperName`
 		);
 
 		const components: ComponentInsert[] = result.records.map((record: any) => ({
 			component_id: record.Id,
-			api_name: record.NamespacePrefix 
+			api_name: record.NamespacePrefix
 				? `${record.NamespacePrefix}__${record.DeveloperName}__c`
 				: `${record.DeveloperName}__c`,
-			name: record.Label || record.DeveloperName,
+			name: record.DeveloperName, // Use DeveloperName as display name
 			type: 'object' as const,
 			description: record.Description || null,
 			namespace: record.NamespacePrefix || null,
 			metadata: {
-				developername: record.DeveloperName,
-				label: record.Label,
-				plurallabel: record.PluralLabel
+				developername: record.DeveloperName
 			},
 			dependencies: [],
 			dependents: []
@@ -149,11 +148,13 @@ export async function fetchCustomObjects(conn: Connection): Promise<ComponentIns
 export async function fetchCustomFields(conn: Connection): Promise<ComponentInsert[]> {
 	try {
 		console.log('[Salesforce] Fetching Custom Fields...');
-		
+
 		// Query custom fields using Tooling API
+		// Note: CustomField in Tooling API has very limited fields available
+		// We can only reliably query: Id, DeveloperName, NamespacePrefix, TableEnumOrId
 		const result = await conn.tooling.query(
-			`SELECT Id, DeveloperName, NamespacePrefix, TableEnumOrId, Label, DataType, Length
-			 FROM CustomField 
+			`SELECT Id, DeveloperName, NamespacePrefix, TableEnumOrId
+			 FROM CustomField
 			 WHERE ManageableState IN ('unmanaged', 'installed')
 			 ORDER BY TableEnumOrId, DeveloperName
 			 LIMIT 2000`
@@ -161,19 +162,16 @@ export async function fetchCustomFields(conn: Connection): Promise<ComponentInse
 
 		const components: ComponentInsert[] = result.records.map((record: any) => ({
 			component_id: record.Id,
-			api_name: record.NamespacePrefix 
+			api_name: record.NamespacePrefix
 				? `${record.TableEnumOrId}.${record.NamespacePrefix}__${record.DeveloperName}__c`
 				: `${record.TableEnumOrId}.${record.DeveloperName}__c`,
-			name: record.Label || record.DeveloperName,
+			name: record.DeveloperName, // Use DeveloperName as display name
 			type: 'field' as const,
 			description: null,
 			namespace: record.NamespacePrefix || null,
 			metadata: {
 				developername: record.DeveloperName,
-				tableenumorid: record.TableEnumOrId,
-				label: record.Label,
-				datatype: record.DataType,
-				length: record.Length
+				tableenumorid: record.TableEnumOrId
 			},
 			dependencies: [],
 			dependents: []
@@ -241,27 +239,27 @@ export async function fetchTriggers(conn: Connection): Promise<ComponentInsert[]
 export async function fetchVisualforcePages(conn: Connection): Promise<ComponentInsert[]> {
 	try {
 		console.log('[Salesforce] Fetching Visualforce Pages...');
-		
+
 		// Query Visualforce pages using Tooling API
+		// Note: ApexPage doesn't have MasterLabel in Tooling API, only Name
 		const result = await conn.tooling.query(
-			`SELECT Id, Name, NamespacePrefix, ApiVersion, Description, MasterLabel
-			 FROM ApexPage 
+			`SELECT Id, Name, NamespacePrefix, ApiVersion, Description
+			 FROM ApexPage
 			 WHERE ManageableState IN ('unmanaged', 'installed')
 			 ORDER BY Name`
 		);
 
 		const components: ComponentInsert[] = result.records.map((record: any) => ({
 			component_id: record.Id,
-			api_name: record.NamespacePrefix 
+			api_name: record.NamespacePrefix
 				? `${record.NamespacePrefix}__${record.Name}`
 				: record.Name,
-			name: record.MasterLabel || record.Name,
+			name: record.Name, // Use Name as display name
 			type: 'visualforce' as const,
 			description: record.Description || null,
 			namespace: record.NamespacePrefix || null,
 			metadata: {
 				name: record.Name,
-				masterlabel: record.MasterLabel,
 				apiversion: record.ApiVersion
 			},
 			dependencies: [],
@@ -287,8 +285,9 @@ export async function fetchFlows(conn: Connection): Promise<ComponentInsert[]> {
 		console.log('[Salesforce] Fetching Flows...');
 
 		// Query flows using Tooling API
+		// Note: FlowDefinition has limited fields available in Tooling API
 		const result = await conn.tooling.query(
-			`SELECT Id, DeveloperName, NamespacePrefix, Label, Description, ProcessType, ApiVersion
+			`SELECT Id, DeveloperName, NamespacePrefix, Description, ActiveVersionId
 			 FROM FlowDefinition
 			 WHERE ManageableState IN ('unmanaged', 'installed')
 			 ORDER BY DeveloperName`
@@ -299,15 +298,13 @@ export async function fetchFlows(conn: Connection): Promise<ComponentInsert[]> {
 			api_name: record.NamespacePrefix
 				? `${record.NamespacePrefix}__${record.DeveloperName}`
 				: record.DeveloperName,
-			name: record.Label || record.DeveloperName,
+			name: record.DeveloperName, // Use DeveloperName as display name
 			type: 'flow' as const,
 			description: record.Description || null,
 			namespace: record.NamespacePrefix || null,
 			metadata: {
 				developername: record.DeveloperName,
-				label: record.Label,
-				processtype: record.ProcessType,
-				apiversion: record.ApiVersion
+				activeversionid: record.ActiveVersionId
 			},
 			dependencies: [],
 			dependents: []

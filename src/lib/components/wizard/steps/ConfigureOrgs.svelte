@@ -233,7 +233,92 @@
 		window.location.href = `/api/auth/salesforce/login?${params.toString()}`;
 	}
 
+	let sourceRefreshing = $state(false);
+	let targetRefreshing = $state(false);
 
+	async function handleRefreshSourceComponents() {
+		// Use the new model: selectedSourceOrgId
+		const selectedOrgId = wizardStore.state.selectedSourceOrgId;
+
+		if (!selectedOrgId) {
+			console.error('[RefreshComponents] No source org selected');
+			return;
+		}
+
+		// Find the org in cachedOrgs to get the org_id (Salesforce ID)
+		const sourceOrg = wizardStore.state.cachedOrgs.find(org => org.id === selectedOrgId);
+
+		if (!sourceOrg) {
+			console.error('[RefreshComponents] Source org not found in cached orgs');
+			return;
+		}
+
+		try {
+			sourceRefreshing = true;
+			console.log('[RefreshComponents] Refreshing source components for org:', sourceOrg.org_id);
+
+			const response = await fetch(`/api/orgs/${sourceOrg.org_id}/sync?refreshComponents=true`, {
+				method: 'POST'
+			});
+
+			if (!response.ok) {
+				throw new Error('Failed to refresh components');
+			}
+
+			const data = await response.json();
+			console.log('[RefreshComponents] Source components refreshed:', data);
+
+			// Reload cached orgs to get updated component counts
+			await wizardStore.loadCachedOrgs();
+		} catch (err) {
+			console.error('[RefreshComponents] Error:', err);
+			wizardStore.setSourceOrgError('Failed to refresh components');
+		} finally {
+			sourceRefreshing = false;
+		}
+	}
+
+	async function handleRefreshTargetComponents() {
+		// Use the new model: selectedTargetOrgId
+		const selectedOrgId = wizardStore.state.selectedTargetOrgId;
+
+		if (!selectedOrgId) {
+			console.error('[RefreshComponents] No target org selected');
+			return;
+		}
+
+		// Find the org in cachedOrgs to get the org_id (Salesforce ID)
+		const targetOrg = wizardStore.state.cachedOrgs.find(org => org.id === selectedOrgId);
+
+		if (!targetOrg) {
+			console.error('[RefreshComponents] Target org not found in cached orgs');
+			return;
+		}
+
+		try {
+			targetRefreshing = true;
+			console.log('[RefreshComponents] Refreshing target components for org:', targetOrg.org_id);
+
+			const response = await fetch(`/api/orgs/${targetOrg.org_id}/sync?refreshComponents=true`, {
+				method: 'POST'
+			});
+
+			if (!response.ok) {
+				throw new Error('Failed to refresh components');
+			}
+
+			const data = await response.json();
+			console.log('[RefreshComponents] Target components refreshed:', data);
+
+			// Reload cached orgs to get updated component counts
+			await wizardStore.loadCachedOrgs();
+		} catch (err) {
+			console.error('[RefreshComponents] Error:', err);
+			wizardStore.setTargetOrgError('Failed to refresh components');
+		} finally {
+			targetRefreshing = false;
+		}
+	}
 
 	async function handleDisconnectSource() {
 		try {
@@ -303,6 +388,16 @@
 
 	// Check connection status on mount and handle OAuth callbacks
 	onMount(async () => {
+		// IMPORTANT: Load cached orgs first for the new single-login model
+		console.log('[ConfigureOrgs] onMount - Loading cached orgs...');
+		try {
+			await wizardStore.loadCachedOrgs();
+			console.log('[ConfigureOrgs] Cached orgs loaded:', wizardStore.state.cachedOrgs.length);
+			console.log('[ConfigureOrgs] Cached orgs:', wizardStore.state.cachedOrgs);
+		} catch (err) {
+			console.error('[ConfigureOrgs] Failed to load cached organizations:', err);
+		}
+
 		// Handle OAuth callback query parameters
 		const urlParams = new URLSearchParams(window.location.search);
 		const connectedOrg = urlParams.get('connected');
@@ -335,6 +430,9 @@
 
 			// Update source org if connected
 			if (status.source?.isConnected && status.source.instanceUrl) {
+				console.log('[ConfigureOrgs] Source org is connected');
+				console.log('[ConfigureOrgs] status.source:', status.source);
+
 				// Use server-provided metadata if available, otherwise use local state
 				const orgName = status.source.orgName || sourceOrgName || extractOrgNameFromUrl(status.source.instanceUrl) || 'Source Organization';
 				const orgType = (status.source.orgType as 'production' | 'sandbox' | 'developer' | 'scratch') || sourceOrgType;
@@ -352,6 +450,25 @@
 				};
 				// Don't pass tokens to the store - they stay server-side only
 				wizardStore.setSourceOrg(org);
+
+				console.log('[ConfigureOrgs] Looking for cached org with org_id:', status.source.orgId);
+				console.log('[ConfigureOrgs] cachedOrgs:', wizardStore.state.cachedOrgs);
+
+				// IMPORTANT: Also set the selectedSourceOrgId for the new single-login model
+				// Find the cached org by org_id (Salesforce ID) and set its database UUID
+				const cachedOrg = wizardStore.state.cachedOrgs.find(
+					cachedOrg => cachedOrg.org_id === status.source.orgId
+				);
+
+				console.log('[ConfigureOrgs] Found cachedOrg:', cachedOrg);
+
+				if (cachedOrg) {
+					console.log('[ConfigureOrgs] Setting selectedSourceOrgId to:', cachedOrg.id);
+					wizardStore.setSelectedSourceOrg(cachedOrg.id);
+				} else {
+					console.error('[ConfigureOrgs] Could not find cached org with org_id:', status.source.orgId);
+				}
+
 				sourceInstanceUrl = status.source.instanceUrl;
 				if (!sourceOrgNameManuallyEdited && status.source.orgName) {
 					sourceOrgName = status.source.orgName;
@@ -381,6 +498,16 @@
 				};
 				// Don't pass tokens to the store - they stay server-side only
 				wizardStore.setTargetOrg(org);
+
+				// IMPORTANT: Also set the selectedTargetOrgId for the new single-login model
+				// Find the cached org by org_id (Salesforce ID) and set its database UUID
+				const cachedOrg = wizardStore.state.cachedOrgs.find(
+					cachedOrg => cachedOrg.org_id === status.target.orgId
+				);
+				if (cachedOrg) {
+					wizardStore.setSelectedTargetOrg(cachedOrg.id);
+				}
+
 				targetInstanceUrl = status.target.instanceUrl;
 				if (!targetOrgNameManuallyEdited && status.target.orgName) {
 					targetOrgName = status.target.orgName;
@@ -397,6 +524,28 @@
 </script>
 
 
+
+<div class="space-y-6">
+	<!-- Migration Notice -->
+	{#if sourceIsConnected && wizardStore.state.cachedOrgs.length === 0}
+		<Alert.Root variant="destructive">
+			<AlertCircle class="h-4 w-4" />
+			<Alert.Title>Legacy Connection Detected</Alert.Title>
+			<Alert.Description>
+				Your organizations are connected using the old authentication model. Please disconnect and reconnect them to use the new features.
+				<div class="mt-2 flex gap-2">
+					<Button variant="outline" size="sm" onclick={handleDisconnectSource}>
+						Disconnect Source
+					</Button>
+					{#if targetIsConnected}
+						<Button variant="outline" size="sm" onclick={handleDisconnectTarget}>
+							Disconnect Target
+						</Button>
+					{/if}
+				</div>
+			</Alert.Description>
+		</Alert.Root>
+	{/if}
 
 <div class="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] gap-6 items-center">
 	<!-- Source Organization -->
@@ -567,8 +716,18 @@
 
 					<!-- Action Buttons -->
 					<div class="flex gap-3">
-						<Button variant="secondary" class="flex-1">
-							View Details
+						<Button
+							variant="secondary"
+							class="flex-1"
+							onclick={handleRefreshSourceComponents}
+							disabled={sourceRefreshing}
+						>
+							{#if sourceRefreshing}
+								<Loader2 class="mr-2 h-4 w-4 animate-spin" />
+								Refreshing...
+							{:else}
+								Refresh Components
+							{/if}
 						</Button>
 						<Button variant="outline" onclick={handleDisconnectSource}>
 							Disconnect
@@ -902,8 +1061,18 @@
 
 					<!-- Action Buttons -->
 					<div class="flex gap-3">
-						<Button variant="secondary" class="flex-1">
-							View Details
+						<Button
+							variant="secondary"
+							class="flex-1"
+							onclick={handleRefreshTargetComponents}
+							disabled={targetRefreshing}
+						>
+							{#if targetRefreshing}
+								<Loader2 class="mr-2 h-4 w-4 animate-spin" />
+								Refreshing...
+							{:else}
+								Refresh Components
+							{/if}
 						</Button>
 						<Button variant="outline" onclick={handleDisconnectTarget}>
 							Disconnect
@@ -1050,4 +1219,4 @@
 	</Card.Root>
 	</div>
 </div>
-
+</div>

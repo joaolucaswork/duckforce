@@ -31,9 +31,12 @@
   },
   "dependencies": {
     "@jsforce/jsforce-node": "^3.10.8",
+    "@supabase/ssr": "^0.7.0",
     "@supabase/supabase-js": "^2.78.0",
     "bits-ui": "^2.14.1",
     "clsx": "^2.1.1",
-    "date-fns": "^4.1.0"
+    "date-fns": "^4.1.0",
+    "konva": "^10.0.8",
+    "svelte-konva": "^1.0.1"
   }
 }

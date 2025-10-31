@@ -9,6 +9,33 @@
 	import type { MigrationProject, MigrationStats, SalesforceComponent, MigrationStatus } from '$lib/types/salesforce';
 	import ComponentDetail from '$lib/components/ComponentDetail.svelte';
 	import Logo from '$lib/components/Logo.svelte';
+	import { goto } from '$app/navigation';
+	import { onMount } from 'svelte';
+	import type { PageData } from './$types';
+
+	interface Props {
+		data: PageData;
+	}
+
+	let { data }: Props = $props();
+
+	// Handle email confirmation redirect
+	onMount(() => {
+		// Safe to use onAuthStateChange on client-side for email confirmation
+		// The session is validated server-side via safeGetSession() in hooks.server.ts
+		const { data: authListener } = data.supabase.auth.onAuthStateChange(async (event, session) => {
+			if (event === 'SIGNED_IN' && session) {
+				// User just signed in (via email confirmation or other means)
+				console.log('User signed in, redirecting to wizard');
+				await goto('/wizard');
+			}
+		});
+
+		// Cleanup listener on component destroy
+		return () => {
+			authListener.subscription.unsubscribe();
+		};
+	});
 
 	let project: MigrationProject = $state(mockProject);
 	let stats: MigrationStats = $derived(calculateMigrationStats(project.components));

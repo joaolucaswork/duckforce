@@ -11,6 +11,9 @@ importers:
       '@jsforce/jsforce-node':
         specifier: ^3.10.8
         version: 3.10.8
+      '@supabase/ssr':
+        specifier: ^0.7.0
+        version: 0.7.0(@supabase/supabase-js@2.78.0)
       '@supabase/supabase-js':
         specifier: ^2.78.0
         version: 2.78.0
@@ -23,6 +26,12 @@ importers:
       date-fns:
         specifier: ^4.1.0
         version: 4.1.0
+      konva:
+        specifier: ^10.0.8
+        version: 10.0.8
+      svelte-konva:
+        specifier: ^1.0.1
+        version: 1.0.1(konva@10.0.8)(svelte@5.43.0)
     devDependencies:
       '@internationalized/date':
         specifier: ^3.10.0
@@ -512,6 +521,11 @@ packages:
   '@supabase/realtime-js@2.78.0':
     resolution: {integrity: sha512-rCs1zmLe7of7hj4s7G9z8rTqzWuNVtmwDr3FiCRCJFawEoa+RQO1xpZGbdeuVvVmKDyVN6b542Okci+117y/LQ==}
 
+  '@supabase/ssr@0.7.0':
+    resolution: {integrity: sha512-G65t5EhLSJ5c8hTCcXifSL9Q/ZRXvqgXeNo+d3P56f4U1IxwTqjB64UfmfixvmMcjuxnq2yGqEWVJqUcO+AzAg==}
+    peerDependencies:
+      '@supabase/supabase-js': ^2.43.4
+
   '@supabase/storage-js@2.78.0':
     resolution: {integrity: sha512-n17P0JbjHOlxqJpkaGFOn97i3EusEKPEbWOpuk1r4t00Wg06B8Z4GUiq0O0n1vUpjiMgJUkLIMuBVp+bEgunzQ==}
 
@@ -732,6 +746,10 @@ packages:
     resolution: {integrity: sha512-U71cyTamuh1CRNCfpGY6to28lxvNwPG4Guz/EVjgf3Jmzv0vlDp1atT9eS5dDjMYHucpHbWns6Lwf3BKz6svdw==}
     engines: {node: '>= 0.6'}
 
+  cookie@1.0.2:
+    resolution: {integrity: sha512-9Kr/j4O16ISv8zBBhJoi4bXOYNTkFLOqSL3UDB0njXxCXNezjeyVrJyGOWtgfs/q2km1gwBcfH8q1yEGoMYunA==}
+    engines: {node: '>=18'}
+
   csprng@0.1.2:
     resolution: {integrity: sha512-D3WAbvvgUVIqSxUfdvLeGjuotsB32bvfVPd+AaaTWMtyUeC9zgCnw5xs94no89yFLVsafvY9dMZEhTwsY/ZecA==}
     engines: {node: '>=0.6.0'}
@@ -900,6 +918,9 @@ packages:
   kleur@4.1.5:
     resolution: {integrity: sha512-o+NO+8WrRiQEE4/7nwRJhN1HWpVmJm511pBHUxPLtp0BUISzlBplORYSmTclCnJvQq2tKu/sgl3xVpkc7ZWuQQ==}
     engines: {node: '>=6'}
+
+  konva@10.0.8:
+    resolution: {integrity: sha512-kQqErBIj2mR/srYDheRD2hq5v0gkwqoJZvbPz3DhCcyRNJfMEnd/AzLhWz2f567BB9vtL2p2EqKwI6n+MyM9Hw==}
 
   lightningcss-android-arm64@1.30.2:
     resolution: {integrity: sha512-BH9sEdOCahSgmkVhBLeU7Hc9DWeZ1Eb6wNS6Da8igvUwAe0sqROHddIlvU06q3WyXVEOYDZ6ykBZQnjTbmo4+A==}
@@ -1104,6 +1125,12 @@ packages:
     peerDependencies:
       svelte: ^4.0.0 || ^5.0.0-next.0
       typescript: '>=5.0.0'
+
+  svelte-konva@1.0.1:
+    resolution: {integrity: sha512-XfiSF9+J9phRupYGzMfbp46dnqsgZfN3Fwqei4YVAy0/9dr7k/qGtEucOqEcwgL1GEI2rxwSFXH0S5zbZqyMJQ==}
+    peerDependencies:
+      konva: 8 - 10
+      svelte: ^5.0.0
 
   svelte-toolbelt@0.10.6:
     resolution: {integrity: sha512-YWuX+RE+CnWYx09yseAe4ZVMM7e7GRFZM6OYWpBKOb++s+SQ8RBIMMe+Bs/CznBMc0QPLjr+vDBxTAkozXsFXQ==}
@@ -1581,6 +1608,11 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
+  '@supabase/ssr@0.7.0(@supabase/supabase-js@2.78.0)':
+    dependencies:
+      '@supabase/supabase-js': 2.78.0
+      cookie: 1.0.2
+
   '@supabase/storage-js@2.78.0':
     dependencies:
       '@supabase/node-fetch': 2.6.15
@@ -1797,6 +1829,8 @@ snapshots:
 
   cookie@0.6.0: {}
 
+  cookie@1.0.2: {}
+
   csprng@0.1.2:
     dependencies:
       sequin: 0.1.1
@@ -1976,6 +2010,8 @@ snapshots:
   jiti@2.6.1: {}
 
   kleur@4.1.5: {}
+
+  konva@10.0.8: {}
 
   lightningcss-android-arm64@1.30.2:
     optional: true
@@ -2185,6 +2221,11 @@ snapshots:
       typescript: 5.9.3
     transitivePeerDependencies:
       - picomatch
+
+  svelte-konva@1.0.1(konva@10.0.8)(svelte@5.43.0):
+    dependencies:
+      konva: 10.0.8
+      svelte: 5.43.0
 
   svelte-toolbelt@0.10.6(@sveltejs/kit@2.48.3(@sveltejs/vite-plugin-svelte@6.2.1(svelte@5.43.0)(vite@6.4.1(@types/node@22.18.13)(jiti@2.6.1)(lightningcss@1.30.2)))(svelte@5.43.0)(vite@6.4.1(@types/node@22.18.13)(jiti@2.6.1)(lightningcss@1.30.2)))(svelte@5.43.0):
     dependencies:

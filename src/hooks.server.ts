@@ -1,26 +1,58 @@
 import { redirect, type Handle } from '@sveltejs/kit';
+import { sequence } from '@sveltejs/kit/hooks';
 import { createServerSupabaseClient } from '$lib/server/supabase/auth';
 
 /**
- * SvelteKit server hooks for authentication
- * This runs on every request to:
- * 1. Create a Supabase client with the user's session
- * 2. Protect routes that require authentication
- * 3. Redirect authenticated users away from auth pages
+ * Supabase client setup hook
+ * Creates a Supabase client for each request and validates the session
  */
-export const handle: Handle = async ({ event, resolve }) => {
+const supabaseHandle: Handle = async ({ event, resolve }) => {
 	// Create Supabase client for this request
-	const supabase = createServerSupabaseClient(event.cookies);
+	event.locals.supabase = createServerSupabaseClient(event.cookies);
 
-	// Get the current session
-	const {
-		data: { session }
-	} = await supabase.auth.getSession();
+	/**
+	 * Unlike supabase.auth.getSession(), which returns the session without
+	 * validating the JWT, this function also calls getUser() to validate the
+	 * JWT before returning the session.
+	 */
+	event.locals.safeGetSession = async () => {
+		const {
+			data: { session }
+		} = await event.locals.supabase.auth.getSession();
 
-	// Attach Supabase client and session to event.locals
-	event.locals.supabase = supabase;
+		if (!session) {
+			return { session: null, user: null };
+		}
+
+		const {
+			data: { user },
+			error
+		} = await event.locals.supabase.auth.getUser();
+
+		if (error) {
+			// JWT validation has failed
+			return { session: null, user: null };
+		}
+
+		return { session, user };
+	};
+
+	return resolve(event, {
+		filterSerializedResponseHeaders(name) {
+			// Supabase needs these headers
+			return name === 'content-range' || name === 'x-supabase-api-version';
+		}
+	});
+};
+
+/**
+ * Authentication guard hook
+ * Protects routes and redirects based on auth state
+ */
+const authGuard: Handle = async ({ event, resolve }) => {
+	const { session, user } = await event.locals.safeGetSession();
 	event.locals.session = session;
-	event.locals.user = session?.user ?? null;
+	event.locals.user = user;
 
 	// Protected routes - require authentication
 	const protectedRoutes = ['/wizard', '/api/orgs'];
@@ -38,4 +70,6 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	return resolve(event);
 };
+
+export const handle: Handle = sequence(supabaseHandle, authGuard);
 
