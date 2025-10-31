@@ -8,17 +8,20 @@ import {
 	type OrgType
 } from '$lib/server/salesforce/cookies';
 import { SALESFORCE_LOGIN_URL } from '$env/static/private';
+import { clearActiveSession } from '$lib/server/db/session';
 
 /**
  * Logout and revoke Salesforce OAuth tokens
  *
  * Query parameters:
- * - org: 'source' | 'target' (required) - which org to logout from
+ * - org: 'source' | 'target' (optional, defaults to 'source') - which org to logout from
+ *   Note: In the new single-login model, this clears the active session
  *
  * Flow:
  * 1. Get current session tokens
  * 2. Revoke refresh token with Salesforce (preferred over access token)
  * 3. Clear all session cookies
+ * 4. Clear active session from Supabase
  *
  * Returns:
  * {
@@ -26,11 +29,14 @@ import { SALESFORCE_LOGIN_URL } from '$env/static/private';
  *   error?: string
  * }
  */
-export const POST: RequestHandler = async ({ url, cookies }) => {
-	// Get org type from query parameter
-	const orgParam = url.searchParams.get('org');
-	if (!orgParam || (orgParam !== 'source' && orgParam !== 'target')) {
-		throw error(400, 'Invalid or missing "org" parameter. Must be "source" or "target".');
+export const POST: RequestHandler = async ({ url, cookies, locals }) => {
+	// Get user ID (TODO: Replace with actual user authentication)
+	const userId = (locals as any).user?.id || 'demo-user';
+
+	// Get org type from query parameter (defaults to 'source' for backward compatibility)
+	const orgParam = url.searchParams.get('org') || 'source';
+	if (orgParam !== 'source' && orgParam !== 'target') {
+		throw error(400, 'Invalid "org" parameter. Must be "source" or "target".');
 	}
 	const org: OrgType = orgParam as OrgType;
 
@@ -66,6 +72,14 @@ export const POST: RequestHandler = async ({ url, cookies }) => {
 
 	// Also clear any temporary OAuth state cookies
 	clearOAuthStateCookies(cookies, org);
+
+	// Clear active session from Supabase
+	try {
+		await clearActiveSession(userId);
+	} catch (err) {
+		console.error('Error clearing active session from Supabase (non-fatal):', err);
+		// Don't fail the logout if Supabase clear fails
+	}
 
 	return json({
 		success: true

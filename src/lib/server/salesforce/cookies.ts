@@ -1,11 +1,16 @@
 import type { Cookies } from '@sveltejs/kit';
 
 /**
- * Cookie management utilities for dual-org Salesforce sessions
- * 
- * Cookies are namespaced by org type (source/target) to support dual-org authentication
+ * Cookie management utilities for Salesforce sessions
+ *
+ * DEPRECATED: Most functionality has been moved to Supabase-based session management.
+ * This file is kept for backward compatibility and will be removed in a future version.
+ *
+ * The new single-login model stores all session data in Supabase, with only the
+ * active session ID stored in cookies.
  */
 
+// DEPRECATED: Use Supabase organizations table instead
 export type OrgType = 'source' | 'target';
 
 // Cookie names
@@ -42,6 +47,7 @@ const TEMP_COOKIE_OPTIONS = {
 
 /**
  * Set OAuth session cookies for an org
+ * @deprecated Use Supabase organizations table instead. This function is kept for backward compatibility.
  */
 export function setOrgSessionCookies(
 	cookies: Cookies,
@@ -80,6 +86,7 @@ export function setOrgSessionCookies(
 
 /**
  * Get OAuth session data for an org
+ * @deprecated Use Supabase organizations table instead. This function is kept for backward compatibility.
  */
 export function getOrgSessionCookies(
 	cookies: Cookies,
@@ -108,6 +115,7 @@ export function getOrgSessionCookies(
 
 /**
  * Clear OAuth session cookies for an org
+ * @deprecated Use Supabase organizations table instead. This function is kept for backward compatibility.
  */
 export function clearOrgSessionCookies(cookies: Cookies, org: OrgType): void {
 	const cookieOptions = { path: '/' };

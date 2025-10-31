@@ -1,10 +1,12 @@
-import type { 
-	WizardState, 
-	WizardStep, 
+import type {
+	WizardState,
+	WizardStep,
 	OrgConnection,
 	ComponentSelection,
 	DependencyReview,
-	MigrationExecution
+	MigrationExecution,
+	CachedOrganization,
+	OrganizationSummary
 } from '$lib/types/wizard';
 import type { SalesforceOrg, SalesforceComponent } from '$lib/types/salesforce';
 import { initialWizardState, WIZARD_STEPS } from '$lib/types/wizard';
@@ -44,6 +46,11 @@ class WizardStore {
 
 		switch (step) {
 			case 'configure-orgs':
+				// NEW: Check if both source and target orgs are selected and different
+				if (this.state.selectedSourceOrgId && this.state.selectedTargetOrgId) {
+					return this.state.selectedSourceOrgId !== this.state.selectedTargetOrgId;
+				}
+				// DEPRECATED: Fallback to old logic for backward compatibility
 				return this.state.sourceOrg.isConnected && this.state.targetOrg.isConnected;
 			case 'select-components':
 				return this.state.componentSelection.selectedIds.size > 0;
@@ -54,6 +61,169 @@ class WizardStore {
 			default:
 				return false;
 		}
+	}
+
+	// NEW: Cached Organizations methods
+	async loadCachedOrgs() {
+		this.state.isLoadingOrgs = true;
+		this.state.orgsError = null;
+
+		try {
+			const response = await fetch('/api/orgs');
+			if (!response.ok) {
+				throw new Error(`Failed to load organizations: ${response.statusText}`);
+			}
+
+			const data = await response.json();
+			this.state.cachedOrgs = data.organizations || [];
+
+			// Set active org ID if there's an active org
+			const activeOrg = this.state.cachedOrgs.find(org => org.is_active);
+			if (activeOrg) {
+				this.state.activeOrgId = activeOrg.id;
+			}
+		} catch (error) {
+			this.state.orgsError = error instanceof Error ? error.message : 'Failed to load organizations';
+			console.error('Error loading cached orgs:', error);
+		} finally {
+			this.state.isLoadingOrgs = false;
+		}
+	}
+
+	async switchActiveOrg(orgId: string) {
+		try {
+			const response = await fetch(`/api/orgs/${orgId}/activate`, {
+				method: 'POST'
+			});
+
+			if (!response.ok) {
+				throw new Error(`Failed to activate organization: ${response.statusText}`);
+			}
+
+			// Update local state
+			this.state.cachedOrgs = this.state.cachedOrgs.map(org => ({
+				...org,
+				is_active: org.id === orgId
+			}));
+			this.state.activeOrgId = orgId;
+		} catch (error) {
+			console.error('Error switching active org:', error);
+			throw error;
+		}
+	}
+
+	async refreshOrgData(orgId: string) {
+		try {
+			const response = await fetch(`/api/orgs/${orgId}/sync`, {
+				method: 'POST'
+			});
+
+			if (!response.ok) {
+				throw new Error(`Failed to sync organization: ${response.statusText}`);
+			}
+
+			const data = await response.json();
+
+			// Update the org in the cached list
+			this.state.cachedOrgs = this.state.cachedOrgs.map(org =>
+				org.id === orgId
+					? { ...org, last_synced_at: new Date().toISOString(), component_counts: data.component_counts }
+					: org
+			);
+
+			return data;
+		} catch (error) {
+			console.error('Error refreshing org data:', error);
+			throw error;
+		}
+	}
+
+	async deleteOrg(orgId: string) {
+		try {
+			const response = await fetch(`/api/orgs/${orgId}`, {
+				method: 'DELETE'
+			});
+
+			if (!response.ok) {
+				throw new Error(`Failed to delete organization: ${response.statusText}`);
+			}
+
+			// Remove from local state
+			this.state.cachedOrgs = this.state.cachedOrgs.filter(org => org.id !== orgId);
+
+			// Clear selections if deleted org was selected
+			if (this.state.selectedSourceOrgId === orgId) {
+				this.state.selectedSourceOrgId = null;
+			}
+			if (this.state.selectedTargetOrgId === orgId) {
+				this.state.selectedTargetOrgId = null;
+			}
+			if (this.state.activeOrgId === orgId) {
+				this.state.activeOrgId = null;
+			}
+		} catch (error) {
+			console.error('Error deleting org:', error);
+			throw error;
+		}
+	}
+
+	connectNewOrg() {
+		// Redirect to OAuth flow
+		window.location.href = '/api/auth/salesforce/login';
+	}
+
+	setSelectedSourceOrg(orgId: string | null) {
+		this.state.selectedSourceOrgId = orgId;
+		this.updateStepCompletion();
+	}
+
+	setSelectedTargetOrg(orgId: string | null) {
+		this.state.selectedTargetOrgId = orgId;
+		this.updateStepCompletion();
+	}
+
+	private updateStepCompletion() {
+		// Mark configure-orgs step as complete if both orgs are selected and different
+		if (this.state.selectedSourceOrgId &&
+		    this.state.selectedTargetOrgId &&
+		    this.state.selectedSourceOrgId !== this.state.selectedTargetOrgId) {
+			this.markStepComplete('configure-orgs');
+		}
+	}
+
+	// Computed properties for source/target orgs
+	get sourceOrg(): SalesforceOrg | null {
+		if (!this.state.selectedSourceOrgId) return null;
+
+		const cachedOrg = this.state.cachedOrgs.find(org => org.id === this.state.selectedSourceOrgId);
+		if (!cachedOrg) return null;
+
+		return {
+			id: cachedOrg.id,
+			name: cachedOrg.org_name,
+			instanceUrl: cachedOrg.instance_url,
+			orgType: cachedOrg.org_type,
+			apiVersion: '60.0', // Default API version
+			color: cachedOrg.color,
+			icon: cachedOrg.icon
+		};
+	}
+
+	get targetOrg(): SalesforceOrg | null {
+		if (!this.state.selectedTargetOrgId) return null;
+
+		const cachedOrg = this.state.cachedOrgs.find(org => org.id === this.state.selectedTargetOrgId);
+		if (!cachedOrg) return null;
+
+		return {
+			id: cachedOrg.id,
+			name: cachedOrg.org_name,
+			instanceUrl: cachedOrg.instance_url,
+			orgType: cachedOrg.org_type,
+			apiVersion: '60.0', // Default API version
+			color: cachedOrg.color,
+			icon: cachedOrg.icon
+		};
 	}
 
 	// Source Org methods

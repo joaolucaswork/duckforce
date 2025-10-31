@@ -8,5 +8,9 @@ declare module '$env/static/private' {
 	export const SALESFORCE_CLIENT_SECRET: string | undefined;
 	export const SALESFORCE_CALLBACK_URL: string;
 	export const SALESFORCE_LOGIN_URL: string;
+
+	// Supabase configuration
+	export const SUPABASE_URL: string;
+	export const SUPABASE_SERVICE_KEY: string;
 }
 

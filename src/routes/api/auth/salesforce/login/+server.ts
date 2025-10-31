@@ -19,7 +19,8 @@ import crypto from 'crypto';
  * Initiate OAuth 2.0 flow with PKCE for Salesforce authentication
  *
  * Query parameters:
- * - org: 'source' | 'target' (required) - which org to authenticate
+ * - org: 'source' | 'target' (optional, defaults to 'source') - which org to authenticate
+ *   Note: In the new single-login model, this is mainly for backward compatibility
  * - orgType: 'production' | 'sandbox' | 'developer' | 'scratch' (optional) - org type
  * - orgName: string (optional) - custom org name
  * - color: string (optional) - UI color
@@ -32,10 +33,10 @@ import crypto from 'crypto';
  * 4. Redirect to Salesforce authorization URL (sandbox or production based on orgType)
  */
 export const GET: RequestHandler = async ({ url, cookies }) => {
-	// Get org type from query parameter
-	const orgParam = url.searchParams.get('org');
-	if (!orgParam || (orgParam !== 'source' && orgParam !== 'target')) {
-		throw error(400, 'Invalid or missing "org" parameter. Must be "source" or "target".');
+	// Get org type from query parameter (defaults to 'source' for backward compatibility)
+	const orgParam = url.searchParams.get('org') || 'source';
+	if (orgParam !== 'source' && orgParam !== 'target') {
+		throw error(400, 'Invalid "org" parameter. Must be "source" or "target".');
 	}
 	const org: OrgType = orgParam as OrgType;
 
