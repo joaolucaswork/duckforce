@@ -233,22 +233,7 @@
 		window.location.href = `/api/auth/salesforce/login?${params.toString()}`;
 	}
 
-	// Clear temporary OAuth cookies (useful after server restart)
-	async function handleClearTempCookies() {
-		try {
-			const response = await fetch('/api/auth/salesforce/clear-temp', {
-				method: 'POST'
-			});
 
-			if (!response.ok) {
-				throw new Error('Failed to clear cookies');
-			}
-
-			console.log('Temporary OAuth cookies cleared successfully');
-		} catch (err) {
-			console.error('Clear cookies error:', err);
-		}
-	}
 
 	async function handleDisconnectSource() {
 		try {
@@ -411,21 +396,7 @@
 	});
 </script>
 
-<!-- Debug: Clear OAuth cookies button (only in development) -->
-{#if import.meta.env.DEV}
-	<div class="mb-4">
-		<Alert.Root variant="default" class="bg-yellow-50 border-yellow-200">
-			<Info class="h-4 w-4 text-yellow-600" />
-			<Alert.Title class="text-yellow-800">Modo de Desenvolvimento</Alert.Title>
-			<Alert.Description class="text-yellow-700 flex items-center justify-between">
-				<span>Se você reiniciou o servidor e está tendo erros de OAuth, clique aqui para limpar cookies temporários:</span>
-				<Button onclick={handleClearTempCookies} variant="outline" size="sm" class="ml-4 border-yellow-300 hover:bg-yellow-100">
-					Limpar Cookies OAuth
-				</Button>
-			</Alert.Description>
-		</Alert.Root>
-	</div>
-{/if}
+
 
 <div class="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] gap-6 items-center">
 	<!-- Source Organization -->
