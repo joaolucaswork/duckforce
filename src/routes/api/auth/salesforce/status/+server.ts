@@ -1,4 +1,4 @@
-import { json } from '@sveltejs/kit';
+import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getOrgSessionCookies, hasValidSession } from '$lib/server/salesforce/cookies';
 import { getUserOrganizations } from '$lib/server/db/organizations';
@@ -22,8 +22,10 @@ import type { OrganizationResponse } from '$lib/server/db/types';
  * }
  */
 export const GET: RequestHandler = async ({ cookies, locals }) => {
-	// Get user ID (TODO: Replace with actual user authentication)
-	const userId = (locals as any).user?.id || 'demo-user';
+	const userId = locals.user?.id;
+	if (!userId) {
+		throw error(401, 'Unauthorized');
+	}
 
 	// Check legacy cookie-based sessions (for backward compatibility)
 	const sourceSession = getOrgSessionCookies(cookies, 'source');

@@ -45,8 +45,11 @@ import type { ComponentResponse } from '$lib/server/db/types';
  * - dependents: Array of components that depend on this one
  */
 export const GET: RequestHandler = async ({ params, url, locals }) => {
-	// TODO: Implement proper user authentication
-	const userId = (locals as any).user?.id || 'demo-user';
+	const userId = locals.user?.id;
+	if (!userId) {
+		throw error(401, 'Unauthorized');
+	}
+
 	const { orgId } = params;
 
 	if (!orgId) {

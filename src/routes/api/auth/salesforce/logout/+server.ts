@@ -30,8 +30,10 @@ import { clearActiveSession } from '$lib/server/db/session';
  * }
  */
 export const POST: RequestHandler = async ({ url, cookies, locals }) => {
-	// Get user ID (TODO: Replace with actual user authentication)
-	const userId = (locals as any).user?.id || 'demo-user';
+	const userId = locals.user?.id;
+	if (!userId) {
+		throw error(401, 'Unauthorized');
+	}
 
 	// Get org type from query parameter (defaults to 'source' for backward compatibility)
 	const orgParam = url.searchParams.get('org') || 'source';

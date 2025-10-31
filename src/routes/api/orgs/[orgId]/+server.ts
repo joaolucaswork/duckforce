@@ -18,8 +18,11 @@ import type { OrganizationResponse } from '$lib/server/db/types';
  * }
  */
 export const GET: RequestHandler = async ({ params, locals }) => {
-	// TODO: Implement proper user authentication
-	const userId = (locals as any).user?.id || 'demo-user';
+	const userId = locals.user?.id;
+	if (!userId) {
+		throw error(401, 'Unauthorized');
+	}
+
 	const { orgId } = params;
 
 	if (!orgId) {
@@ -83,8 +86,11 @@ export const GET: RequestHandler = async ({ params, locals }) => {
  * the active session will be cleared.
  */
 export const DELETE: RequestHandler = async ({ params, locals }) => {
-	// TODO: Implement proper user authentication
-	const userId = (locals as any).user?.id || 'demo-user';
+	const userId = locals.user?.id;
+	if (!userId) {
+		throw error(401, 'Unauthorized');
+	}
+
 	const { orgId } = params;
 
 	if (!orgId) {

@@ -29,10 +29,10 @@ import type { OrganizationResponse } from '$lib/server/db/types';
  * - is_active: Whether this is the currently active organization
  */
 export const GET: RequestHandler = async ({ locals }) => {
-	// TODO: Implement proper user authentication
-	// For now, we'll use a placeholder user ID
-	// In production, this should come from locals.user.id or session
-	const userId = (locals as any).user?.id || 'demo-user';
+	const userId = locals.user?.id;
+	if (!userId) {
+		throw error(401, 'Unauthorized');
+	}
 
 	try {
 		// Fetch all organizations for the user

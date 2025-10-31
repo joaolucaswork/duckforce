@@ -202,8 +202,11 @@ export const GET: RequestHandler = async ({ url, cookies, locals }) => {
 			throw new Error('Failed to retrieve organization ID from Salesforce');
 		}
 
-		// Get user ID (TODO: Replace with actual user authentication)
-		const userId = (locals as any).user?.id || 'demo-user';
+		// Get user ID
+		const userId = locals.user?.id;
+		if (!userId) {
+			throw error(401, 'Unauthorized');
+		}
 		console.log(`[OAuth Callback - ${org}] User ID:`, userId);
 
 		// Save organization to Supabase
