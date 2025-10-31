@@ -221,9 +221,11 @@ export const GET: RequestHandler = async ({ url, cookies, locals }) => {
 			access_token: tokens.accessToken,
 			refresh_token: tokens.refreshToken,
 			token_expires_at: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(), // 2 hours
+			oauth_client_id: clientId, // Store which Client ID was used for this org
 			api_version: '60.0'
 		});
 		console.log(`[OAuth Callback - ${org}] Organization saved to Supabase:`, savedOrg.id);
+		console.log(`[OAuth Callback - ${org}] Stored OAuth Client ID: ${clientId}`);
 
 		// Set as active session
 		console.log(`[OAuth Callback - ${org}] Setting active session`);

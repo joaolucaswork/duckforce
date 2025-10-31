@@ -29,6 +29,7 @@ export interface Database {
 					access_token: string | null;
 					refresh_token: string | null;
 					token_expires_at: string | null;
+					oauth_client_id: string | null;
 					api_version: string;
 					last_connected_at: string;
 					last_synced_at: string | null;
@@ -47,6 +48,7 @@ export interface Database {
 					access_token?: string | null;
 					refresh_token?: string | null;
 					token_expires_at?: string | null;
+					oauth_client_id?: string | null;
 					api_version?: string;
 					last_connected_at?: string;
 					last_synced_at?: string | null;
@@ -65,6 +67,7 @@ export interface Database {
 					access_token?: string | null;
 					refresh_token?: string | null;
 					token_expires_at?: string | null;
+					oauth_client_id?: string | null;
 					api_version?: string;
 					last_connected_at?: string;
 					last_synced_at?: string | null;

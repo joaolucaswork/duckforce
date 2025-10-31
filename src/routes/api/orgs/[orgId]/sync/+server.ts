@@ -111,10 +111,16 @@ export const POST: RequestHandler = async ({ params, locals, url }) => {
 
 		console.log(`[Sync] Using login URL: ${loginUrl}`);
 
-		// Create OAuth2 client
+		// Use the Client ID that was used to authenticate this org
+		// Fall back to default if not stored (for backward compatibility)
+		const clientId = org.oauth_client_id || SALESFORCE_CLIENT_ID;
+		console.log(`[Sync] Using OAuth Client ID: ${clientId}`);
+		console.log(`[Sync] Client ID source: ${org.oauth_client_id ? 'stored in org' : 'default from env'}`);
+
+		// Create OAuth2 client with the correct Client ID for this org
 		const oauth2 = createOAuth2Client(
 			loginUrl,
-			SALESFORCE_CLIENT_ID,
+			clientId,
 			SALESFORCE_CLIENT_SECRET || undefined as any,
 			SALESFORCE_CALLBACK_URL
 		);
