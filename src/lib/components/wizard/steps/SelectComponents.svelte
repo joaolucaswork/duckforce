@@ -1,25 +1,63 @@
 <script lang="ts">
 	import { wizardStore } from '$lib/stores/wizard.svelte';
-	import { mockComponents } from '$lib/data/mock-data';
 	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import * as Tabs from '$lib/components/ui/tabs';
 	import * as Alert from '$lib/components/ui/alert';
-	import { Search, LoaderCircle, Info } from '@lucide/svelte';
-	import type { ComponentType } from '$lib/types/salesforce';
+	import { LoaderCircle, Info, TriangleAlert, RefreshCw, LayoutGrid, Columns2 } from '@lucide/svelte';
+	import type { ComponentType, SalesforceComponent } from '$lib/types/salesforce';
 	import { onMount } from 'svelte';
+	import ConnectedOrganizations from '$lib/components/wizard/ConnectedOrganizations.svelte';
+	import ComponentListPanel from '$lib/components/wizard/ComponentListPanel.svelte';
+	import VirtualList from '$lib/components/ui/VirtualList.svelte';
 
 	let searchQuery = $state('');
 	let selectedTab = $state<ComponentType | 'all'>('all');
+	let errorMessage = $state<string | null>(null);
+	let lastLoadedSourceOrgId = $state<string | null>(null);
+	let lastLoadedTargetOrgId = $state<string | null>(null);
+	let viewMode = $state<'unified' | 'side-by-side'>('unified');
 
 	const isLoading = $derived(wizardStore.state.componentSelection.isLoading);
 	const availableComponents = $derived(wizardStore.state.componentSelection.availableComponents);
 	const selectedIds = $derived(wizardStore.state.componentSelection.selectedIds);
+	const selectedSourceOrgId = $derived(wizardStore.state.selectedSourceOrgId);
+	const selectedTargetOrgId = $derived(wizardStore.state.selectedTargetOrgId);
+	const cachedOrgs = $derived(wizardStore.state.cachedOrgs);
+	const currentStep = $derived(wizardStore.state.currentStep);
 
-	// Filter components based on search and tab
-	const filteredComponents = $derived(() => {
+	// Get source and target orgs
+	const sourceOrg = $derived(() =>
+		selectedSourceOrgId ? cachedOrgs.find(org => org.id === selectedSourceOrgId) : null
+	);
+	const targetOrg = $derived(() =>
+		selectedTargetOrgId ? cachedOrgs.find(org => org.id === selectedTargetOrgId) : null
+	);
+
+	// Separate components by org
+	const sourceComponents = $derived(() =>
+		availableComponents.filter(c => c.sourceOrgId === selectedSourceOrgId)
+	);
+	const targetComponents = $derived(() =>
+		availableComponents.filter(c => c.sourceOrgId === selectedTargetOrgId)
+	);
+
+	// Memoization: Store filtered results by cache key
+	let filteredComponentsCache = $state<{
+		key: string;
+		result: SalesforceComponent[];
+	} | null>(null);
+
+	// Filter components based on search and tab with memoization
+	const filteredComponents = $derived.by(() => {
+		const cacheKey = `${selectedTab}-${searchQuery}-${availableComponents.length}`;
+
+		// Check if we can use cached result
+		if (filteredComponentsCache && filteredComponentsCache.key === cacheKey) {
+			return filteredComponentsCache.result;
+		}
+
 		let components = availableComponents;
 
 		// Filter by type
@@ -41,7 +79,29 @@
 		return components;
 	});
 
-	const componentCounts = $derived(() => {
+	// Update cache after filteredComponents is computed
+	$effect(() => {
+		const cacheKey = `${selectedTab}-${searchQuery}-${availableComponents.length}`;
+		filteredComponentsCache = {
+			key: cacheKey,
+			result: filteredComponents
+		};
+	});
+
+	// Memoize component counts
+	let componentCountsCache = $state<{
+		key: number;
+		result: Record<ComponentType | 'all', number>;
+	} | null>(null);
+
+	const componentCounts = $derived.by(() => {
+		const cacheKey = availableComponents.length;
+
+		// Return cached counts if components haven't changed
+		if (componentCountsCache && componentCountsCache.key === cacheKey) {
+			return componentCountsCache.result;
+		}
+
 		const counts: Record<ComponentType | 'all', number> = {
 			all: availableComponents.length,
 			lwc: 0,
@@ -60,22 +120,188 @@
 		return counts;
 	});
 
+	// Update counts cache after componentCounts is computed
+	$effect(() => {
+		componentCountsCache = {
+			key: availableComponents.length,
+			result: componentCounts
+		};
+	});
+
 	const selectedCount = $derived(selectedIds.size);
 
-	onMount(() => {
-		// Load components from source org (mock data for now)
+	/**
+	 * Fetch components from both source and target organizations
+	 */
+	async function fetchComponents() {
+		console.log('[fetchComponents] Starting...');
+		console.log('[fetchComponents] selectedSourceOrgId:', selectedSourceOrgId);
+		console.log('[fetchComponents] selectedTargetOrgId:', selectedTargetOrgId);
+
+		// Check if at least source org is selected
+		if (!selectedSourceOrgId) {
+			console.error('[fetchComponents] No source org selected!');
+			wizardStore.setComponentsError('Please select a source organization first');
+			errorMessage = 'Please select a source organization first';
+			return;
+		}
+
 		wizardStore.setComponentsLoading(true);
-		
-		// Simulate API call
-		setTimeout(() => {
-			// Reset migration status for wizard flow
-			const components = mockComponents.map(c => ({
-				...c,
-				migrationStatus: 'pending' as const,
-				migrationDate: undefined
-			}));
-			wizardStore.setAvailableComponents(components);
-		}, 1000);
+		errorMessage = null;
+
+		try {
+			console.log('[fetchComponents] Looking for orgs in cachedOrgs...');
+			console.log('[fetchComponents] cachedOrgs:', wizardStore.state.cachedOrgs);
+
+			// Get the source org
+			const sourceOrg = wizardStore.state.cachedOrgs.find(
+				org => org.id === selectedSourceOrgId
+			);
+
+			if (!sourceOrg) {
+				throw new Error('Source organization not found');
+			}
+
+			// Get the target org (if selected)
+			const targetOrg = selectedTargetOrgId
+				? wizardStore.state.cachedOrgs.find(org => org.id === selectedTargetOrgId)
+				: null;
+
+			console.log('[fetchComponents] Found sourceOrg:', sourceOrg);
+			console.log('[fetchComponents] Found targetOrg:', targetOrg);
+
+			// Fetch components from both orgs in parallel
+			const fetchPromises = [];
+			const orgData: Array<{ orgId: string; orgName: string; components: SalesforceComponent[] }> = [];
+
+			// Fetch from source org
+			console.log('[fetchComponents] Fetching from source org:', sourceOrg.org_id);
+			fetchPromises.push(
+				fetch(`/api/orgs/${sourceOrg.org_id}/components`)
+					.then(async (response) => {
+						if (!response.ok) {
+							const errorData = await response.json().catch(() => ({}));
+							throw new Error(errorData.message || `Failed to fetch components from source org: ${response.statusText}`);
+						}
+						const data = await response.json();
+						const components: SalesforceComponent[] = data.components.map((comp: any) => ({
+							id: comp.id,
+							name: comp.name,
+							type: comp.type,
+							apiName: comp.api_name,
+							description: comp.description || undefined,
+							namespace: comp.namespace || undefined,
+							dependencies: Array.isArray(comp.dependencies) ? comp.dependencies : [],
+							dependents: Array.isArray(comp.dependents) ? comp.dependents : [],
+							migrationStatus: 'pending' as const,
+							migrationDate: undefined,
+							metadata: comp.metadata || {}
+						}));
+						orgData.push({
+							orgId: sourceOrg.id,
+							orgName: sourceOrg.org_name,
+							components
+						});
+						console.log('[fetchComponents] Received', components.length, 'components from source org');
+					})
+			);
+
+			// Fetch from target org if selected
+			if (targetOrg) {
+				console.log('[fetchComponents] Fetching from target org:', targetOrg.org_id);
+				fetchPromises.push(
+					fetch(`/api/orgs/${targetOrg.org_id}/components`)
+						.then(async (response) => {
+							if (!response.ok) {
+								const errorData = await response.json().catch(() => ({}));
+								throw new Error(errorData.message || `Failed to fetch components from target org: ${response.statusText}`);
+							}
+							const data = await response.json();
+							const components: SalesforceComponent[] = data.components.map((comp: any) => ({
+								id: comp.id,
+								name: comp.name,
+								type: comp.type,
+								apiName: comp.api_name,
+								description: comp.description || undefined,
+								namespace: comp.namespace || undefined,
+								dependencies: Array.isArray(comp.dependencies) ? comp.dependencies : [],
+								dependents: Array.isArray(comp.dependents) ? comp.dependents : [],
+								migrationStatus: 'pending' as const,
+								migrationDate: undefined,
+								metadata: comp.metadata || {}
+							}));
+							orgData.push({
+								orgId: targetOrg.id,
+								orgName: targetOrg.org_name,
+								components
+							});
+							console.log('[fetchComponents] Received', components.length, 'components from target org');
+						})
+				);
+			}
+
+			// Wait for all fetches to complete
+			await Promise.all(fetchPromises);
+
+			// Set components from all orgs
+			console.log('[fetchComponents] Setting components from', orgData.length, 'org(s)');
+			wizardStore.setComponentsFromMultipleOrgs(orgData);
+			console.log('[fetchComponents] Components set successfully. Total count:', wizardStore.state.componentSelection.availableComponents.length);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : 'Failed to load components';
+			wizardStore.setComponentsError(message);
+			errorMessage = message;
+			console.error('[fetchComponents] Error:', error);
+		}
+	}
+
+	onMount(async () => {
+		console.log('[SelectComponents] onMount - Starting');
+		console.log('[SelectComponents] selectedSourceOrgId:', selectedSourceOrgId);
+		console.log('[SelectComponents] cachedOrgs count:', wizardStore.state.cachedOrgs.length);
+		console.log('[SelectComponents] cachedOrgs:', wizardStore.state.cachedOrgs);
+
+		// Ensure cached orgs are loaded before fetching components
+		if (wizardStore.state.cachedOrgs.length === 0) {
+			console.log('[SelectComponents] Loading cached orgs...');
+			try {
+				await wizardStore.loadCachedOrgs();
+				console.log('[SelectComponents] Cached orgs loaded:', wizardStore.state.cachedOrgs.length);
+			} catch (err) {
+				console.error('[SelectComponents] Failed to load cached organizations:', err);
+				errorMessage = 'Failed to load organizations. Please try again.';
+				return;
+			}
+		}
+
+		console.log('[SelectComponents] Calling fetchComponents...');
+		// Load components from source org
+		fetchComponents();
+	});
+
+	// Reactive effect: Reload components when returning to this step or when orgs change
+	$effect(() => {
+		// Track dependencies
+		const step = currentStep;
+		const sourceOrgId = selectedSourceOrgId;
+		const targetOrgId = selectedTargetOrgId;
+
+		console.log('[SelectComponents] $effect triggered - step:', step, 'sourceOrgId:', sourceOrgId, 'targetOrgId:', targetOrgId);
+		console.log('[SelectComponents] Last loaded - source:', lastLoadedSourceOrgId, 'target:', lastLoadedTargetOrgId);
+
+		// Only reload if:
+		// 1. We're on the select-components step
+		// 2. We have a source org selected
+		// 3. Either we haven't loaded yet OR one of the orgs changed
+		const sourceChanged = sourceOrgId && sourceOrgId !== lastLoadedSourceOrgId;
+		const targetChanged = targetOrgId !== lastLoadedTargetOrgId;
+
+		if (step === 'select-components' && sourceOrgId && (sourceChanged || targetChanged)) {
+			console.log('[SelectComponents] $effect - Reloading components. Source changed:', sourceChanged, 'Target changed:', targetChanged);
+			lastLoadedSourceOrgId = sourceOrgId;
+			lastLoadedTargetOrgId = targetOrgId;
+			fetchComponents();
+		}
 	});
 
 	function handleToggleComponent(componentId: string) {
@@ -96,35 +322,76 @@
 </script>
 
 <div class="space-y-6">
+	<!-- Connected Organizations Display -->
+	{#if cachedOrgs.length > 0}
+		<ConnectedOrganizations
+			organizations={cachedOrgs}
+			sourceOrgId={selectedSourceOrgId}
+			targetOrgId={selectedTargetOrgId}
+		/>
+	{/if}
+
 	<!-- Info Alert -->
 	<Alert.Root>
 		<Info class="h-4 w-4" />
 		<Alert.Title>Select Components to Migrate</Alert.Title>
 		<Alert.Description>
-			Choose the components you want to migrate from your source org. Dependencies will be
-			automatically discovered in the next step.
+			{#if viewMode === 'side-by-side'}
+				Viewing components from both organizations side-by-side. Select components from either organization to include in the migration.
+			{:else}
+				Choose the components you want to migrate from your source org. Dependencies will be
+				automatically discovered in the next step.
+			{/if}
 		</Alert.Description>
 	</Alert.Root>
+
+	{#if errorMessage}
+		<!-- Error Alert -->
+		<Alert.Root variant="destructive">
+			<TriangleAlert class="h-4 w-4" />
+			<Alert.Title>Error Loading Components</Alert.Title>
+			<Alert.Description class="flex items-center justify-between">
+				<span>{errorMessage}</span>
+				<Button variant="outline" size="sm" onclick={fetchComponents}>
+					<RefreshCw class="h-4 w-4 mr-2" />
+					Retry
+				</Button>
+			</Alert.Description>
+		</Alert.Root>
+	{/if}
 
 	{#if isLoading}
 		<!-- Loading State -->
 		<div class="flex items-center justify-center py-12">
 			<div class="text-center space-y-4">
 				<LoaderCircle class="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
-				<p class="text-sm text-muted-foreground">Loading components from source org...</p>
+				<p class="text-sm text-muted-foreground">Loading components...</p>
 			</div>
 		</div>
-	{:else}
-		<!-- Search and Actions -->
-		<div class="flex items-center gap-4">
-			<div class="relative flex-1">
-				<Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-				<Input
-					bind:value={searchQuery}
-					placeholder="Search components..."
-					class="pl-9"
-				/>
+	{:else if !errorMessage}
+		<!-- View Mode Toggle and Actions -->
+		<div class="flex items-center justify-between gap-4">
+			<div class="flex items-center gap-2">
+				{#if sourceComponents().length > 0 && targetComponents().length > 0}
+					<Button
+						variant={viewMode === 'unified' ? 'default' : 'outline'}
+						size="sm"
+						onclick={() => viewMode = 'unified'}
+					>
+						<LayoutGrid class="h-4 w-4 mr-2" />
+						Unified
+					</Button>
+					<Button
+						variant={viewMode === 'side-by-side' ? 'default' : 'outline'}
+						size="sm"
+						onclick={() => viewMode = 'side-by-side'}
+					>
+						<Columns2 class="h-4 w-4 mr-2" />
+						Side-by-Side
+					</Button>
+				{/if}
 			</div>
+
 			<div class="flex gap-2">
 				<Button variant="outline" size="sm" onclick={handleSelectAll}>
 					Select All
@@ -142,63 +409,106 @@
 			</p>
 		</div>
 
-		<!-- Component Tabs -->
-		<Tabs.Root bind:value={selectedTab}>
-			<Tabs.List class="grid w-full grid-cols-6">
-				<Tabs.Trigger value="all">
-					All ({componentCounts().all})
-				</Tabs.Trigger>
-				<Tabs.Trigger value="lwc">
-					LWC ({componentCounts().lwc})
-				</Tabs.Trigger>
-				<Tabs.Trigger value="apex">
-					Apex ({componentCounts().apex})
-				</Tabs.Trigger>
-				<Tabs.Trigger value="object">
-					Objects ({componentCounts().object})
-				</Tabs.Trigger>
-				<Tabs.Trigger value="field">
-					Fields ({componentCounts().field})
-				</Tabs.Trigger>
-				<Tabs.Trigger value="trigger">
-					Triggers ({componentCounts().trigger})
-				</Tabs.Trigger>
-			</Tabs.List>
+		<!-- Component View -->
+		{#if viewMode === 'side-by-side' && sourceComponents().length > 0 && targetComponents().length > 0}
+			<!-- Side-by-Side View -->
+			<div class="grid grid-cols-2 gap-4 h-[600px]">
+				<!-- Source Org Panel -->
+				<div class="border rounded-lg p-4">
+					<ComponentListPanel
+						components={sourceComponents()}
+						selectedIds={selectedIds}
+						orgName={sourceOrg()?.org_name || 'Source Org'}
+						orgColor={sourceOrg()?.color}
+						onToggleComponent={handleToggleComponent}
+						isSelected={isSelected}
+					/>
+				</div>
 
-			<Tabs.Content value={selectedTab} class="mt-4">
-				<div class="space-y-2 max-h-[400px] overflow-y-auto">
-					{#if filteredComponents().length === 0}
+				<!-- Target Org Panel -->
+				<div class="border rounded-lg p-4">
+					<ComponentListPanel
+						components={targetComponents()}
+						selectedIds={selectedIds}
+						orgName={targetOrg()?.org_name || 'Target Org'}
+						orgColor={targetOrg()?.color}
+						onToggleComponent={handleToggleComponent}
+						isSelected={isSelected}
+					/>
+				</div>
+			</div>
+		{:else}
+			<!-- Unified View -->
+			<Tabs.Root bind:value={selectedTab}>
+				<Tabs.List class="grid w-full grid-cols-6">
+					<Tabs.Trigger value="all">
+						All ({componentCounts.all})
+					</Tabs.Trigger>
+					<Tabs.Trigger value="lwc">
+						LWC ({componentCounts.lwc})
+					</Tabs.Trigger>
+					<Tabs.Trigger value="apex">
+						Apex ({componentCounts.apex})
+					</Tabs.Trigger>
+					<Tabs.Trigger value="object">
+						Objects ({componentCounts.object})
+					</Tabs.Trigger>
+					<Tabs.Trigger value="field">
+						Fields ({componentCounts.field})
+					</Tabs.Trigger>
+					<Tabs.Trigger value="trigger">
+						Triggers ({componentCounts.trigger})
+					</Tabs.Trigger>
+				</Tabs.List>
+
+				<Tabs.Content value={selectedTab} class="mt-4">
+					{#if filteredComponents.length === 0}
 						<div class="text-center py-8 text-muted-foreground">
 							<p>No components found</p>
 						</div>
 					{:else}
-						{#each filteredComponents() as component}
-							<button
-								onclick={() => handleToggleComponent(component.id)}
-								class="w-full flex items-center gap-3 p-3 rounded-lg border hover:bg-accent transition-colors text-left"
-							>
-								<Checkbox checked={isSelected(component.id)} />
-								<div class="flex-1">
-									<div class="flex items-center gap-2">
-										<Badge variant="outline" class="text-xs">
-											{component.type.toUpperCase()}
-										</Badge>
-										<p class="font-medium">{component.name}</p>
+						<VirtualList
+							items={filteredComponents}
+							itemHeight={100}
+							height={400}
+						>
+							{#snippet children(component: SalesforceComponent)}
+								<button
+									onclick={() => handleToggleComponent(component.id)}
+									class="w-full flex items-center gap-3 p-3 mb-2 rounded-lg border hover:bg-accent transition-colors text-left"
+								>
+									<Checkbox checked={isSelected(component.id)} />
+									<div class="flex-1">
+										<div class="flex items-center gap-2 flex-wrap">
+											<Badge variant="outline" class="text-xs">
+												{component.type.toUpperCase()}
+											</Badge>
+											{#if component.sourceOrgName}
+												<Badge
+													variant="secondary"
+													class="text-xs"
+													style="background-color: {wizardStore.state.cachedOrgs.find(o => o.id === component.sourceOrgId)?.color || '#6b7280'}20; color: {wizardStore.state.cachedOrgs.find(o => o.id === component.sourceOrgId)?.color || '#6b7280'};"
+												>
+													{component.sourceOrgName}
+												</Badge>
+											{/if}
+											<p class="font-medium">{component.name}</p>
+										</div>
+										<p class="text-sm text-muted-foreground">{component.apiName}</p>
+										{#if component.description}
+											<p class="text-xs text-muted-foreground mt-1">{component.description}</p>
+										{/if}
 									</div>
-									<p class="text-sm text-muted-foreground">{component.apiName}</p>
-									{#if component.description}
-										<p class="text-xs text-muted-foreground mt-1">{component.description}</p>
-									{/if}
-								</div>
-								<div class="text-sm text-muted-foreground">
-									{component.dependencies.length} dep{component.dependencies.length !== 1 ? 's' : ''}
-								</div>
-							</button>
-						{/each}
+									<div class="text-sm text-muted-foreground">
+										{component.dependencies.length} dep{component.dependencies.length !== 1 ? 's' : ''}
+									</div>
+								</button>
+							{/snippet}
+						</VirtualList>
 					{/if}
-				</div>
-			</Tabs.Content>
-		</Tabs.Root>
+				</Tabs.Content>
+			</Tabs.Root>
+		{/if}
 	{/if}
 </div>
 

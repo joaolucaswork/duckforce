@@ -33,6 +33,8 @@
 	import type { SalesforceOrg } from '$lib/types/salesforce';
 	import type { Component } from 'svelte';
 	import duckforceArrow from '$lib/assets/duckforce-arrow.png';
+	import { onMount } from 'svelte';
+	import { Skeleton } from '$lib/components/ui/skeleton';
 
 	// Preset Color Palette - Professional, muted tones with better contrast
 	const COLOR_PALETTE = [
@@ -87,6 +89,9 @@
 	let targetIconScrollContainer: HTMLDivElement | undefined = $state();
 	let targetShowLeftArrow = $state(false);
 	let targetShowRightArrow = $state(true);
+
+	// Loading state for initial mount
+	let isInitialLoad = $state(true);
 
 	/**
 	 * Extract organization name from a Salesforce instance URL
@@ -202,116 +207,408 @@
 		setTimeout(updateTargetArrowVisibility, 300);
 	}
 
-	// Mock connection function for source org
-	async function handleConnectSource() {
-		if (!sourceInstanceUrl) {
-			wizardStore.setSourceOrgError('Please fill in all required fields');
+	// Real OAuth connection function for source org
+	function handleConnectSource() {
+		// Build login URL with customization parameters
+		const params = new URLSearchParams({
+			org: 'source',
+			orgType: sourceOrgType,
+			...(sourceOrgName && { orgName: sourceOrgName }),
+			color: sourceColor,
+			icon: sourceIcon,
+			// Add timestamp to prevent browser caching
+			t: Date.now().toString()
+		});
+		window.location.href = `/api/auth/salesforce/login?${params.toString()}`;
+	}
+
+	// Real OAuth connection function for target org
+	function handleConnectTarget() {
+		// Build login URL with customization parameters
+		const params = new URLSearchParams({
+			org: 'target',
+			orgType: targetOrgType,
+			...(targetOrgName && { orgName: targetOrgName }),
+			color: targetColor,
+			icon: targetIcon,
+			// Add timestamp to prevent browser caching
+			t: Date.now().toString()
+		});
+		window.location.href = `/api/auth/salesforce/login?${params.toString()}`;
+	}
+
+	let sourceRefreshing = $state(false);
+	let targetRefreshing = $state(false);
+
+	async function handleRefreshSourceComponents() {
+		// Use the new model: selectedSourceOrgId
+		const selectedOrgId = wizardStore.state.selectedSourceOrgId;
+
+		if (!selectedOrgId) {
+			console.error('[RefreshComponents] No source org selected');
 			return;
 		}
 
-		// Use a default name if not provided
-		const orgName = sourceOrgName || 'Source Organization';
+		// Find the org in cachedOrgs to get the org_id (Salesforce ID)
+		const sourceOrg = wizardStore.state.cachedOrgs.find(org => org.id === selectedOrgId);
 
-		wizardStore.setSourceOrgConnecting(true);
-
-		// Simulate API call
-		await new Promise(resolve => setTimeout(resolve, 1500));
-
-		try {
-			const org: SalesforceOrg = {
-				id: `org-${Date.now()}`,
-				name: orgName,
-				instanceUrl: sourceInstanceUrl,
-				orgType: sourceOrgType,
-				apiVersion: sourceApiVersion,
-				color: sourceColor,
-				icon: sourceIcon
-			};
-
-			wizardStore.setSourceOrg(org, 'mock-access-token', sourceInstanceUrl);
-			// Update the local name if it was empty
-			if (!sourceOrgName) {
-				sourceOrgName = orgName;
-			}
-		} catch (err) {
-			wizardStore.setSourceOrgError('Failed to connect to Salesforce org');
-		}
-	}
-
-	// Mock connection function for target org
-	async function handleConnectTarget() {
-		if (!targetInstanceUrl) {
-			wizardStore.setTargetOrgError('Please fill in all required fields');
+		if (!sourceOrg) {
+			console.error('[RefreshComponents] Source org not found in cached orgs');
 			return;
 		}
 
-		// Use a default name if not provided
-		const orgName = targetOrgName || 'Destination Organization';
-
-		wizardStore.setTargetOrgConnecting(true);
-
-		// Simulate API call
-		await new Promise(resolve => setTimeout(resolve, 1500));
-
 		try {
-			const org: SalesforceOrg = {
-				id: `org-${Date.now()}`,
-				name: orgName,
-				instanceUrl: targetInstanceUrl,
-				orgType: targetOrgType,
-				apiVersion: targetApiVersion,
-				color: targetColor,
-				icon: targetIcon
-			};
+			sourceRefreshing = true;
+			console.log('[RefreshComponents] Refreshing source components for org:', sourceOrg.org_id);
 
-			wizardStore.setTargetOrg(org, 'mock-access-token', targetInstanceUrl);
-			// Update the local name if it was empty
-			if (!targetOrgName) {
-				targetOrgName = orgName;
+			const response = await fetch(`/api/orgs/${sourceOrg.org_id}/sync?refreshComponents=true`, {
+				method: 'POST'
+			});
+
+			if (!response.ok) {
+				throw new Error('Failed to refresh components');
 			}
+
+			const data = await response.json();
+			console.log('[RefreshComponents] Source components refreshed:', data);
+
+			// Reload cached orgs to get updated component counts
+			await wizardStore.loadCachedOrgs();
 		} catch (err) {
-			wizardStore.setTargetOrgError('Failed to connect to Salesforce org');
+			console.error('[RefreshComponents] Error:', err);
+			wizardStore.setSourceOrgError('Failed to refresh components');
+		} finally {
+			sourceRefreshing = false;
 		}
 	}
 
-	function handleDisconnectSource() {
-		wizardStore.setSourceOrgConnecting(false);
-		wizardStore.state.sourceOrg = {
-			org: null,
-			isConnected: false,
-			isConnecting: false,
-			error: null
-		};
-		sourceOrgName = '';
-		sourceInstanceUrl = '';
-		sourceOrgType = 'production';
-		sourceApiVersion = '60.0';
-		sourceColor = '#2563eb'; // Default blue-600
-		sourceIcon = 'building-2'; // Default icon
-		sourceCustomizationTab = 'color'; // Reset to color tab
-		sourceOrgNameManuallyEdited = false; // Reset manual edit flag
+	async function handleRefreshTargetComponents() {
+		// Use the new model: selectedTargetOrgId
+		const selectedOrgId = wizardStore.state.selectedTargetOrgId;
+
+		if (!selectedOrgId) {
+			console.error('[RefreshComponents] No target org selected');
+			return;
+		}
+
+		// Find the org in cachedOrgs to get the org_id (Salesforce ID)
+		const targetOrg = wizardStore.state.cachedOrgs.find(org => org.id === selectedOrgId);
+
+		if (!targetOrg) {
+			console.error('[RefreshComponents] Target org not found in cached orgs');
+			return;
+		}
+
+		try {
+			targetRefreshing = true;
+			console.log('[RefreshComponents] Refreshing target components for org:', targetOrg.org_id);
+
+			const response = await fetch(`/api/orgs/${targetOrg.org_id}/sync?refreshComponents=true`, {
+				method: 'POST'
+			});
+
+			if (!response.ok) {
+				throw new Error('Failed to refresh components');
+			}
+
+			const data = await response.json();
+			console.log('[RefreshComponents] Target components refreshed:', data);
+
+			// Reload cached orgs to get updated component counts
+			await wizardStore.loadCachedOrgs();
+		} catch (err) {
+			console.error('[RefreshComponents] Error:', err);
+			wizardStore.setTargetOrgError('Failed to refresh components');
+		} finally {
+			targetRefreshing = false;
+		}
 	}
 
-	function handleDisconnectTarget() {
-		wizardStore.setTargetOrgConnecting(false);
-		wizardStore.state.targetOrg = {
-			org: null,
-			isConnected: false,
-			isConnecting: false,
-			error: null
-		};
-		targetOrgName = '';
-		targetInstanceUrl = '';
-		targetOrgType = 'sandbox';
-		targetApiVersion = '60.0';
-		targetColor = '#059669'; // Default emerald-600
-		targetIcon = 'cloud'; // Default icon
-		targetCustomizationTab = 'color'; // Reset to color tab
-		targetOrgNameManuallyEdited = false; // Reset manual edit flag
+	async function handleDisconnectSource() {
+		try {
+			// Call logout endpoint
+			const response = await fetch('/api/auth/salesforce/logout?org=source', {
+				method: 'POST'
+			});
+
+			if (!response.ok) {
+				throw new Error('Logout failed');
+			}
+
+			// Clear local state
+			wizardStore.setSourceOrgConnecting(false);
+			wizardStore.state.sourceOrg = {
+				org: null,
+				isConnected: false,
+				isConnecting: false,
+				error: null
+			};
+			sourceOrgName = '';
+			sourceInstanceUrl = '';
+			sourceOrgType = 'production';
+			sourceApiVersion = '60.0';
+			sourceColor = '#2563eb'; // Default blue-600
+			sourceIcon = 'building-2'; // Default icon
+			sourceCustomizationTab = 'color'; // Reset to color tab
+			sourceOrgNameManuallyEdited = false; // Reset manual edit flag
+		} catch (err) {
+			console.error('Disconnect error:', err);
+			wizardStore.setSourceOrgError('Failed to disconnect');
+		}
 	}
+
+	async function handleDisconnectTarget() {
+		try {
+			// Call logout endpoint
+			const response = await fetch('/api/auth/salesforce/logout?org=target', {
+				method: 'POST'
+			});
+
+			if (!response.ok) {
+				throw new Error('Logout failed');
+			}
+
+			// Clear local state
+			wizardStore.setTargetOrgConnecting(false);
+			wizardStore.state.targetOrg = {
+				org: null,
+				isConnected: false,
+				isConnecting: false,
+				error: null
+			};
+			targetOrgName = '';
+			targetInstanceUrl = '';
+			targetOrgType = 'sandbox';
+			targetApiVersion = '60.0';
+			targetColor = '#059669'; // Default emerald-600
+			targetIcon = 'cloud'; // Default icon
+			targetCustomizationTab = 'color'; // Reset to color tab
+			targetOrgNameManuallyEdited = false; // Reset manual edit flag
+		} catch (err) {
+			console.error('Disconnect error:', err);
+			wizardStore.setTargetOrgError('Failed to disconnect');
+		}
+	}
+
+	// Check connection status on mount and handle OAuth callbacks
+	onMount(async () => {
+		// IMPORTANT: Load cached orgs first for the new single-login model
+		console.log('[ConfigureOrgs] onMount - Loading cached orgs...');
+
+		try {
+			// Load the data
+			await wizardStore.loadCachedOrgs();
+			console.log('[ConfigureOrgs] Cached orgs loaded:', wizardStore.state.cachedOrgs.length);
+			console.log('[ConfigureOrgs] Cached orgs:', wizardStore.state.cachedOrgs);
+		} catch (err) {
+			console.error('[ConfigureOrgs] Failed to load cached organizations:', err);
+		}
+
+		// Handle OAuth callback query parameters
+		const urlParams = new URLSearchParams(window.location.search);
+		const connectedOrg = urlParams.get('connected');
+		const error = urlParams.get('error');
+
+		if (error) {
+			// Show error message
+			const errorMsg = decodeURIComponent(error);
+			// Determine which org failed based on recent activity
+			// For now, we'll show a general error
+			console.error('OAuth error:', errorMsg);
+		}
+
+		if (connectedOrg) {
+			// Clear the query parameter from URL
+			const url = new URL(window.location.href);
+			url.searchParams.delete('connected');
+			url.searchParams.delete('error');
+			window.history.replaceState({}, '', url.toString());
+		}
+
+		// Check current connection status
+		try {
+			const response = await fetch('/api/auth/salesforce/status');
+			if (!response.ok) {
+				throw new Error('Failed to fetch status');
+			}
+
+			const status = await response.json();
+
+			// Update source org if connected
+			if (status.source?.isConnected && status.source.instanceUrl) {
+				console.log('[ConfigureOrgs] Source org is connected');
+				console.log('[ConfigureOrgs] status.source:', status.source);
+
+				// Use server-provided metadata if available, otherwise use local state
+				const orgName = status.source.orgName || sourceOrgName || extractOrgNameFromUrl(status.source.instanceUrl) || 'Source Organization';
+				const orgType = (status.source.orgType as 'production' | 'sandbox' | 'developer' | 'scratch') || sourceOrgType;
+				const color = status.source.color || sourceColor;
+				const icon = status.source.icon || sourceIcon;
+
+				const org: SalesforceOrg = {
+					id: status.source.orgId || `org-source-${Date.now()}`,
+					name: orgName,
+					instanceUrl: status.source.instanceUrl,
+					orgType,
+					apiVersion: sourceApiVersion,
+					color,
+					icon
+				};
+				// Don't pass tokens to the store - they stay server-side only
+				wizardStore.setSourceOrg(org);
+
+				console.log('[ConfigureOrgs] Looking for cached org with org_id:', status.source.orgId);
+				console.log('[ConfigureOrgs] cachedOrgs:', wizardStore.state.cachedOrgs);
+
+				// IMPORTANT: Also set the selectedSourceOrgId for the new single-login model
+				// Find the cached org by org_id (Salesforce ID) and set its database UUID
+				const cachedOrg = wizardStore.state.cachedOrgs.find(
+					cachedOrg => cachedOrg.org_id === status.source.orgId
+				);
+
+				console.log('[ConfigureOrgs] Found cachedOrg:', cachedOrg);
+
+				if (cachedOrg) {
+					console.log('[ConfigureOrgs] Setting selectedSourceOrgId to:', cachedOrg.id);
+					wizardStore.setSelectedSourceOrg(cachedOrg.id);
+				} else {
+					console.error('[ConfigureOrgs] Could not find cached org with org_id:', status.source.orgId);
+				}
+
+				sourceInstanceUrl = status.source.instanceUrl;
+				if (!sourceOrgNameManuallyEdited && status.source.orgName) {
+					sourceOrgName = status.source.orgName;
+				}
+				// Update UI state from server metadata
+				if (status.source.orgType) sourceOrgType = orgType;
+				if (status.source.color) sourceColor = color;
+				if (status.source.icon) sourceIcon = icon;
+			}
+
+			// Update target org if connected
+			if (status.target?.isConnected && status.target.instanceUrl) {
+				// Use server-provided metadata if available, otherwise use local state
+				const orgName = status.target.orgName || targetOrgName || extractOrgNameFromUrl(status.target.instanceUrl) || 'Target Organization';
+				const orgType = (status.target.orgType as 'production' | 'sandbox' | 'developer' | 'scratch') || targetOrgType;
+				const color = status.target.color || targetColor;
+				const icon = status.target.icon || targetIcon;
+
+				const org: SalesforceOrg = {
+					id: status.target.orgId || `org-target-${Date.now()}`,
+					name: orgName,
+					instanceUrl: status.target.instanceUrl,
+					orgType,
+					apiVersion: targetApiVersion,
+					color,
+					icon
+				};
+				// Don't pass tokens to the store - they stay server-side only
+				wizardStore.setTargetOrg(org);
+
+				// IMPORTANT: Also set the selectedTargetOrgId for the new single-login model
+				// Find the cached org by org_id (Salesforce ID) and set its database UUID
+				const cachedOrg = wizardStore.state.cachedOrgs.find(
+					cachedOrg => cachedOrg.org_id === status.target.orgId
+				);
+				if (cachedOrg) {
+					wizardStore.setSelectedTargetOrg(cachedOrg.id);
+				}
+
+				targetInstanceUrl = status.target.instanceUrl;
+				if (!targetOrgNameManuallyEdited && status.target.orgName) {
+					targetOrgName = status.target.orgName;
+				}
+				// Update UI state from server metadata
+				if (status.target.orgType) targetOrgType = orgType;
+				if (status.target.color) targetColor = color;
+				if (status.target.icon) targetIcon = icon;
+			}
+		} catch (err) {
+			console.error('Failed to check connection status:', err);
+		}
+
+		// All data loaded and state updated - now show content with smooth transition
+		await new Promise(resolve => setTimeout(resolve, 100));
+		isInitialLoad = false;
+	});
 </script>
 
-<div class="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] gap-6 items-center">
+
+
+<div class="space-y-6">
+	<!-- Migration Notice -->
+	{#if sourceIsConnected && wizardStore.state.cachedOrgs.length === 0}
+		<Alert.Root variant="destructive">
+			<AlertCircle class="h-4 w-4" />
+			<Alert.Title>Legacy Connection Detected</Alert.Title>
+			<Alert.Description>
+				Your organizations are connected using the old authentication model. Please disconnect and reconnect them to use the new features.
+				<div class="mt-2 flex gap-2">
+					<Button variant="outline" size="sm" onclick={handleDisconnectSource}>
+						Disconnect Source
+					</Button>
+					{#if targetIsConnected}
+						<Button variant="outline" size="sm" onclick={handleDisconnectTarget}>
+							Disconnect Target
+						</Button>
+					{/if}
+				</div>
+			</Alert.Description>
+		</Alert.Root>
+	{/if}
+
+{#if isInitialLoad}
+	<!-- Loading Skeletons -->
+	<div class="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] gap-6 items-center">
+		<!-- Source Skeleton -->
+		<div class="space-y-0">
+			<div class="bg-muted/50 px-6 py-3 rounded-t-lg border border-b-0">
+				<Skeleton class="h-6 w-48" />
+			</div>
+			<Card.Root class="shadow-none rounded-t-none border-t-0">
+				<Card.Content class="space-y-4 pt-6">
+					<Skeleton class="h-10 w-full" />
+					<Skeleton class="h-10 w-full" />
+					<Skeleton class="h-10 w-full" />
+					<div class="flex gap-2">
+						<Skeleton class="h-12 w-12 rounded-md" />
+						<Skeleton class="h-12 w-12 rounded-md" />
+						<Skeleton class="h-12 w-12 rounded-md" />
+						<Skeleton class="h-12 w-12 rounded-md" />
+					</div>
+					<Skeleton class="h-10 w-full" />
+				</Card.Content>
+			</Card.Root>
+		</div>
+
+		<!-- Arrow Skeleton -->
+		<div class="hidden lg:flex items-center justify-center">
+			<Skeleton class="h-12 w-12 rounded-full" />
+		</div>
+
+		<!-- Target Skeleton -->
+		<div class="space-y-0">
+			<div class="bg-muted/50 px-6 py-3 rounded-t-lg border border-b-0">
+				<Skeleton class="h-6 w-48" />
+			</div>
+			<Card.Root class="shadow-none rounded-t-none border-t-0">
+				<Card.Content class="space-y-4 pt-6">
+					<Skeleton class="h-10 w-full" />
+					<Skeleton class="h-10 w-full" />
+					<Skeleton class="h-10 w-full" />
+					<div class="flex gap-2">
+						<Skeleton class="h-12 w-12 rounded-md" />
+						<Skeleton class="h-12 w-12 rounded-md" />
+						<Skeleton class="h-12 w-12 rounded-md" />
+						<Skeleton class="h-12 w-12 rounded-md" />
+					</div>
+					<Skeleton class="h-10 w-full" />
+				</Card.Content>
+			</Card.Root>
+		</div>
+	</div>
+{:else}
+<div class="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] gap-6 items-center animate-in fade-in duration-300">
 	<!-- Source Organization -->
 	<div class="space-y-0">
 		<!-- Source Label Container -->
@@ -480,8 +777,18 @@
 
 					<!-- Action Buttons -->
 					<div class="flex gap-3">
-						<Button variant="secondary" class="flex-1">
-							View Details
+						<Button
+							variant="secondary"
+							class="flex-1"
+							onclick={handleRefreshSourceComponents}
+							disabled={sourceRefreshing}
+						>
+							{#if sourceRefreshing}
+								<Loader2 class="mr-2 h-4 w-4 animate-spin" />
+								Refreshing...
+							{:else}
+								Refresh Components
+							{/if}
 						</Button>
 						<Button variant="outline" onclick={handleDisconnectSource}>
 							Disconnect
@@ -815,8 +1122,18 @@
 
 					<!-- Action Buttons -->
 					<div class="flex gap-3">
-						<Button variant="secondary" class="flex-1">
-							View Details
+						<Button
+							variant="secondary"
+							class="flex-1"
+							onclick={handleRefreshTargetComponents}
+							disabled={targetRefreshing}
+						>
+							{#if targetRefreshing}
+								<Loader2 class="mr-2 h-4 w-4 animate-spin" />
+								Refreshing...
+							{:else}
+								Refresh Components
+							{/if}
 						</Button>
 						<Button variant="outline" onclick={handleDisconnectTarget}>
 							Disconnect
@@ -963,4 +1280,5 @@
 	</Card.Root>
 	</div>
 </div>
-
+{/if}
+</div> <!-- Close space-y-6 -->

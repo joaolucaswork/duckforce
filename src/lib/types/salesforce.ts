@@ -24,6 +24,9 @@ export interface SalesforceComponent {
 	migrationDate?: Date;
 	migrationNotes?: string;
 	metadata?: Record<string, any>;
+	// NEW: Track which org this component belongs to (for multi-org display)
+	sourceOrgId?: string;
+	sourceOrgName?: string;
 }
 
 // Lightning Web Component

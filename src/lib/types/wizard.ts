@@ -6,6 +6,53 @@ export type WizardStep =
 	| 'review-dependencies'
 	| 'execute-migration';
 
+// Cached organization from Supabase
+export interface CachedOrganization {
+	id: string;
+	org_id: string;
+	org_name: string;
+	instance_url: string;
+	org_type: 'production' | 'sandbox' | 'developer' | 'scratch';
+	color?: string;
+	icon?: string;
+	last_connected_at: string;
+	last_synced_at?: string;
+	is_active: boolean;
+	component_counts?: {
+		lwc?: number;
+		apex?: number;
+		objects?: number;
+		fields?: number;
+		triggers?: number;
+		visualforce?: number;
+		flows?: number;
+	};
+}
+
+// Organization summary for UI display
+export interface OrganizationSummary {
+	id: string;
+	org_id: string;
+	org_name: string;
+	instance_url: string;
+	org_type: 'production' | 'sandbox' | 'developer' | 'scratch';
+	color?: string;
+	icon?: string;
+	last_connected_at: string;
+	last_synced_at?: string;
+	is_active: boolean;
+	total_components: number;
+	component_counts: {
+		lwc: number;
+		apex: number;
+		objects: number;
+		fields: number;
+		triggers: number;
+		visualforce: number;
+		flows: number;
+	};
+}
+
 export interface WizardStepConfig {
 	id: WizardStep;
 	title: string;
@@ -45,8 +92,7 @@ export interface OrgConnection {
 	isConnected: boolean;
 	isConnecting: boolean;
 	error: string | null;
-	accessToken?: string;
-	instanceUrl?: string;
+	// Tokens are kept server-side only in httpOnly cookies, not in client state
 }
 
 export interface ComponentSelection {
@@ -75,8 +121,25 @@ export interface MigrationExecution {
 export interface WizardState {
 	currentStep: WizardStep;
 	completedSteps: Set<WizardStep>;
+
+	// NEW: Cached organizations from Supabase
+	cachedOrgs: CachedOrganization[];
+	activeOrgId: string | null;
+
+	// NEW: Selected orgs for migration (by ID)
+	selectedSourceOrgId: string | null;
+	selectedTargetOrgId: string | null;
+
+	// Loading states
+	isLoadingOrgs: boolean;
+	hasLoadedOrgs: boolean;
+	orgsError: string | null;
+
+	// DEPRECATED: Will be removed in Phase 4
+	// These are kept temporarily for backward compatibility
 	sourceOrg: OrgConnection;
 	targetOrg: OrgConnection;
+
 	componentSelection: ComponentSelection;
 	dependencyReview: DependencyReview;
 	migrationExecution: MigrationExecution;
@@ -85,6 +148,17 @@ export interface WizardState {
 export const initialWizardState: WizardState = {
 	currentStep: 'configure-orgs',
 	completedSteps: new Set(),
+
+	// NEW: Cached organizations
+	cachedOrgs: [],
+	activeOrgId: null,
+	selectedSourceOrgId: null,
+	selectedTargetOrgId: null,
+	isLoadingOrgs: false,
+	hasLoadedOrgs: false,
+	orgsError: null,
+
+	// DEPRECATED: Kept for backward compatibility
 	sourceOrg: {
 		org: null,
 		isConnected: false,
@@ -97,6 +171,7 @@ export const initialWizardState: WizardState = {
 		isConnecting: false,
 		error: null
 	},
+
 	componentSelection: {
 		selectedIds: new Set(),
 		availableComponents: [],
