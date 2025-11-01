@@ -5,6 +5,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import * as Select from '$lib/components/ui/select';
 	import * as Tooltip from '$lib/components/ui/tooltip';
+	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { Search, Info, RefreshCw } from '@lucide/svelte';
 	import type { ComponentType, SalesforceComponent } from '$lib/types/salesforce';
 	import type { CachedOrganization } from '$lib/types/wizard';
@@ -23,6 +24,7 @@
 		isSelected: (componentId: string) => boolean;
 		onRefresh?: () => void | Promise<void>;
 		isRefreshing?: boolean;
+		lastUpdated?: Date | null;
 	}
 
 	let {
@@ -36,11 +38,37 @@
 		// onDeselectAll, // Not used anymore - using onToggleComponent instead
 		isSelected,
 		onRefresh,
-		isRefreshing = false
+		isRefreshing = false,
+		lastUpdated = null
 	}: Props = $props();
 
 	let searchQuery = $state('');
 	let selectedTab = $state<ComponentType | 'all'>('all');
+
+	// Format timestamp for display
+	function formatTimestamp(date: Date | null): string {
+		if (!date) return '';
+
+		const now = new Date();
+		const diffMs = now.getTime() - date.getTime();
+		const diffMins = Math.floor(diffMs / 60000);
+
+		// If less than 1 minute ago, show "Just now"
+		if (diffMins < 1) return 'Just now';
+
+		// If less than 60 minutes ago, show "X min ago"
+		if (diffMins < 60) return `${diffMins} min ago`;
+
+		// Otherwise show full date and time
+		return date.toLocaleString('en-US', {
+			month: 'short',
+			day: 'numeric',
+			year: 'numeric',
+			hour: 'numeric',
+			minute: '2-digit',
+			hour12: true
+		});
+	}
 
 	// Memoization: Store filtered results by cache key
 	let filteredComponentsCache = $state<{
@@ -264,7 +292,7 @@
 
 	<!-- Select All Checkbox and Component List -->
 	<div class="flex-1 flex flex-col min-h-0">
-		<!-- Select All Checkbox and Selection Count -->
+		<!-- Select All Checkbox, Selection Count, Timestamp, and Refresh Button -->
 		<div class="flex items-start justify-between mb-2">
 			<button
 				onclick={handleSelectAllToggle}
@@ -282,21 +310,45 @@
 				</span>
 			</button>
 
-			{#if onRefresh}
-				<Button
-					variant="ghost"
-					size="sm"
-					onclick={onRefresh}
-					disabled={isRefreshing}
-					class="h-8"
-				>
-					<RefreshCw class="h-4 w-4 {isRefreshing ? 'animate-spin' : ''}" />
-				</Button>
-			{/if}
+			<div class="flex items-center gap-2">
+				{#if lastUpdated}
+					<span class="text-xs text-muted-foreground">
+						Updated: {formatTimestamp(lastUpdated)}
+					</span>
+				{/if}
+
+				{#if onRefresh}
+					<Button
+						variant="ghost"
+						size="sm"
+						onclick={onRefresh}
+						disabled={isRefreshing}
+						class="h-8"
+					>
+						<RefreshCw class="h-4 w-4 {isRefreshing ? 'animate-spin' : ''}" />
+					</Button>
+				{/if}
+			</div>
 		</div>
 
 		<!-- Component List -->
-		{#if filteredComponents.length === 0}
+		{#if isRefreshing}
+			<!-- Skeleton Loading State -->
+			<div class="space-y-2">
+				{#each Array(8) as _}
+					<div class="flex items-start gap-2 p-2.5 rounded-lg border">
+						<Skeleton class="size-4 rounded mt-0.5 flex-shrink-0" />
+						<div class="flex-1 min-w-0 flex items-start justify-between gap-3">
+							<div class="flex-1 min-w-0 space-y-2">
+								<Skeleton class="h-4 w-3/4" />
+								<Skeleton class="h-3 w-full" />
+							</div>
+							<Skeleton class="h-5 w-16 flex-shrink-0" />
+						</div>
+					</div>
+				{/each}
+			</div>
+		{:else if filteredComponents.length === 0}
 			<div class="text-center py-8 text-muted-foreground">
 				<p class="text-sm">No components found</p>
 			</div>

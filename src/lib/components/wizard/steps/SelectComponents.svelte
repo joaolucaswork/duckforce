@@ -1,26 +1,34 @@
 <script lang="ts">
 	import { wizardStore } from '$lib/stores/wizard.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import { Badge } from '$lib/components/ui/badge';
-	import { Checkbox } from '$lib/components/ui/checkbox';
-	import * as Tabs from '$lib/components/ui/tabs';
 	import * as Alert from '$lib/components/ui/alert';
-	import * as Tooltip from '$lib/components/ui/tooltip';
-	import { LoaderCircle, TriangleAlert, RefreshCw, LayoutGrid, Columns2, Info, X } from '@lucide/svelte';
-	import type { ComponentType, SalesforceComponent } from '$lib/types/salesforce';
+	import { LoaderCircle, TriangleAlert, RefreshCw, X } from '@lucide/svelte';
+	import type { SalesforceComponent } from '$lib/types/salesforce';
 	import { onMount } from 'svelte';
 	import ComponentListPanel from '$lib/components/wizard/ComponentListPanel.svelte';
-	import VirtualList from '$lib/components/ui/VirtualList.svelte';
 
-	let searchQuery = $state('');
-	let selectedTab = $state<ComponentType | 'all'>('all');
+	// COMMENTED OUT: Unused imports for unified view
+	// import { Badge } from '$lib/components/ui/badge';
+	// import { Checkbox } from '$lib/components/ui/checkbox';
+	// import * as Tabs from '$lib/components/ui/tabs';
+	// import * as Tooltip from '$lib/components/ui/tooltip';
+	// import { LayoutGrid, Columns2, Info } from '@lucide/svelte';
+	// import type { ComponentType } from '$lib/types/salesforce';
+	// import VirtualList from '$lib/components/ui/VirtualList.svelte';
+
 	let errorMessage = $state<string | null>(null);
 	let lastLoadedSourceOrgId = $state<string | null>(null);
 	let lastLoadedTargetOrgId = $state<string | null>(null);
-	let viewMode = $state<'unified' | 'side-by-side'>('side-by-side');
 	let showBanner = $state(true);
 	let sourceRefreshing = $state(false);
 	let targetRefreshing = $state(false);
+	let lastUpdatedSource = $state<Date | null>(null);
+	let lastUpdatedTarget = $state<Date | null>(null);
+
+	// COMMENTED OUT: Unused state variables for unified view
+	// let searchQuery = $state('');
+	// let selectedTab = $state<ComponentType | 'all'>('all');
+	// let viewMode = $state<'unified' | 'side-by-side'>('side-by-side');
 
 	const isLoading = $derived(wizardStore.state.componentSelection.isLoading);
 	const availableComponents = $derived(wizardStore.state.componentSelection.availableComponents);
@@ -46,6 +54,8 @@
 		availableComponents.filter(c => c.sourceOrgId === selectedTargetOrgId)
 	);
 
+	// COMMENTED OUT: Memoization and filtering for unified view
+	/*
 	// Memoization: Store filtered results by cache key
 	let filteredComponentsCache = $state<{
 		key: string;
@@ -130,11 +140,12 @@
 			result: componentCounts
 		};
 	});
+	*/
 
 	/**
 	 * Fetch components from both source and target organizations
 	 */
-	async function fetchComponents() {
+	async function fetchComponents(updateTimestamps: boolean = true) {
 		console.log('[fetchComponents] Starting...');
 		console.log('[fetchComponents] selectedSourceOrgId:', selectedSourceOrgId);
 		console.log('[fetchComponents] selectedTargetOrgId:', selectedTargetOrgId);
@@ -248,6 +259,13 @@
 			console.log('[fetchComponents] Setting components from', orgData.length, 'org(s)');
 			wizardStore.setComponentsFromMultipleOrgs(orgData);
 			console.log('[fetchComponents] Components set successfully. Total count:', wizardStore.state.componentSelection.availableComponents.length);
+
+			// Update timestamps for both orgs (only on initial load, not on individual refresh)
+			if (updateTimestamps) {
+				const now = new Date();
+				lastUpdatedSource = now;
+				lastUpdatedTarget = now;
+			}
 		} catch (error) {
 			const message = error instanceof Error ? error.message : 'Failed to load components';
 			wizardStore.setComponentsError(message);
@@ -275,19 +293,56 @@
 			sourceRefreshing = true;
 			console.log('[RefreshComponents] Refreshing source components for org:', sourceOrg.org_id);
 
-			const response = await fetch(`/api/orgs/${sourceOrg.org_id}/sync?refreshComponents=true`, {
+			// Step 1: Sync the org to refresh components in the database
+			const syncResponse = await fetch(`/api/orgs/${sourceOrg.org_id}/sync?refreshComponents=true`, {
 				method: 'POST'
 			});
 
-			if (!response.ok) {
+			if (!syncResponse.ok) {
 				throw new Error('Failed to refresh components');
 			}
 
-			const data = await response.json();
-			console.log('[RefreshComponents] Source components refreshed:', data);
+			const syncData = await syncResponse.json();
+			console.log('[RefreshComponents] Source components refreshed:', syncData);
 
-			// Reload components
-			await fetchComponents();
+			// Step 2: Fetch the updated components for this org only
+			const componentsResponse = await fetch(`/api/orgs/${sourceOrg.org_id}/components`);
+
+			if (!componentsResponse.ok) {
+				const errorData = await componentsResponse.json().catch(() => ({}));
+				throw new Error(errorData.message || 'Failed to fetch updated components');
+			}
+
+			const componentsData = await componentsResponse.json();
+			const updatedComponents: SalesforceComponent[] = componentsData.components.map((comp: any) => ({
+				id: comp.id,
+				name: comp.name,
+				type: comp.type,
+				apiName: comp.api_name,
+				description: comp.description || undefined,
+				namespace: comp.namespace || undefined,
+				dependencies: Array.isArray(comp.dependencies) ? comp.dependencies : [],
+				dependents: Array.isArray(comp.dependents) ? comp.dependents : [],
+				migrationStatus: 'pending' as const,
+				migrationDate: undefined,
+				metadata: comp.metadata || {}
+			}));
+
+			console.log('[RefreshComponents] Fetched', updatedComponents.length, 'updated components from source org');
+
+			// Step 3: Update only the source org's components in the store
+			const currentComponents = wizardStore.state.componentSelection.availableComponents;
+			const otherOrgComponents = currentComponents.filter(c => c.sourceOrgId !== sourceOrg.id);
+			const newComponents = updatedComponents.map(comp => ({
+				...comp,
+				sourceOrgId: sourceOrg.id,
+				sourceOrgName: sourceOrg.org_name
+			}));
+
+			wizardStore.state.componentSelection.availableComponents = [...otherOrgComponents, ...newComponents];
+
+			// Update timestamp for source org only
+			lastUpdatedSource = new Date();
 		} catch (err) {
 			console.error('[RefreshComponents] Error:', err);
 			errorMessage = 'Failed to refresh source components';
@@ -315,19 +370,56 @@
 			targetRefreshing = true;
 			console.log('[RefreshComponents] Refreshing target components for org:', targetOrg.org_id);
 
-			const response = await fetch(`/api/orgs/${targetOrg.org_id}/sync?refreshComponents=true`, {
+			// Step 1: Sync the org to refresh components in the database
+			const syncResponse = await fetch(`/api/orgs/${targetOrg.org_id}/sync?refreshComponents=true`, {
 				method: 'POST'
 			});
 
-			if (!response.ok) {
+			if (!syncResponse.ok) {
 				throw new Error('Failed to refresh components');
 			}
 
-			const data = await response.json();
-			console.log('[RefreshComponents] Target components refreshed:', data);
+			const syncData = await syncResponse.json();
+			console.log('[RefreshComponents] Target components refreshed:', syncData);
 
-			// Reload components
-			await fetchComponents();
+			// Step 2: Fetch the updated components for this org only
+			const componentsResponse = await fetch(`/api/orgs/${targetOrg.org_id}/components`);
+
+			if (!componentsResponse.ok) {
+				const errorData = await componentsResponse.json().catch(() => ({}));
+				throw new Error(errorData.message || 'Failed to fetch updated components');
+			}
+
+			const componentsData = await componentsResponse.json();
+			const updatedComponents: SalesforceComponent[] = componentsData.components.map((comp: any) => ({
+				id: comp.id,
+				name: comp.name,
+				type: comp.type,
+				apiName: comp.api_name,
+				description: comp.description || undefined,
+				namespace: comp.namespace || undefined,
+				dependencies: Array.isArray(comp.dependencies) ? comp.dependencies : [],
+				dependents: Array.isArray(comp.dependents) ? comp.dependents : [],
+				migrationStatus: 'pending' as const,
+				migrationDate: undefined,
+				metadata: comp.metadata || {}
+			}));
+
+			console.log('[RefreshComponents] Fetched', updatedComponents.length, 'updated components from target org');
+
+			// Step 3: Update only the target org's components in the store
+			const currentComponents = wizardStore.state.componentSelection.availableComponents;
+			const otherOrgComponents = currentComponents.filter(c => c.sourceOrgId !== targetOrg.id);
+			const newComponents = updatedComponents.map(comp => ({
+				...comp,
+				sourceOrgId: targetOrg.id,
+				sourceOrgName: targetOrg.org_name
+			}));
+
+			wizardStore.state.componentSelection.availableComponents = [...otherOrgComponents, ...newComponents];
+
+			// Update timestamp for target org only
+			lastUpdatedTarget = new Date();
 		} catch (err) {
 			console.error('[RefreshComponents] Error:', err);
 			errorMessage = 'Failed to refresh target components';
@@ -408,11 +500,7 @@
 		<Alert.Root class="relative">
 			<Alert.Title>Select Components to Migrate</Alert.Title>
 			<Alert.Description class="text-sm pr-8">
-				{#if viewMode === 'side-by-side'}
-					Select components from either organization to include in the migration. Dependencies will be automatically discovered in the next step.
-				{:else}
-					Choose the components you want to migrate from your source org. Dependencies will be automatically discovered in the next step.
-				{/if}
+				Select components from either organization to include in the migration. Dependencies will be automatically discovered in the next step.
 			</Alert.Description>
 			<button
 				onclick={() => showBanner = false}
@@ -433,7 +521,7 @@
 			<Alert.Title>Error Loading Components</Alert.Title>
 			<Alert.Description class="flex items-center justify-between">
 				<span>{errorMessage}</span>
-				<Button variant="outline" size="sm" onclick={fetchComponents}>
+				<Button variant="outline" size="sm" onclick={() => fetchComponents()}>
 					<RefreshCw class="h-4 w-4 mr-2" />
 					Retry
 				</Button>
@@ -450,7 +538,7 @@
 			</div>
 		</div>
 	{:else if !errorMessage}
-		<!-- View Mode Toggle -->
+		<!-- COMMENTED OUT: View Mode Toggle - Keeping only side-by-side view
 		{#if sourceComponents().length > 0 && targetComponents().length > 0}
 			<div class="flex items-center gap-2">
 				<Button
@@ -471,9 +559,10 @@
 				</Button>
 			</div>
 		{/if}
+		-->
 
 		<!-- Component View -->
-		{#if viewMode === 'side-by-side' && sourceComponents().length > 0 && targetComponents().length > 0 && sourceOrg() && targetOrg()}
+		{#if sourceComponents().length > 0 && targetComponents().length > 0 && sourceOrg() && targetOrg()}
 			<!-- Side-by-Side View -->
 			<div class="grid grid-cols-2 gap-4 h-[600px]">
 				<!-- Source Org Panel -->
@@ -490,6 +579,7 @@
 						isSelected={isSelected}
 						onRefresh={handleRefreshSourceComponents}
 						isRefreshing={sourceRefreshing}
+						lastUpdated={lastUpdatedSource}
 					/>
 				</div>
 
@@ -507,11 +597,12 @@
 						isSelected={isSelected}
 						onRefresh={handleRefreshTargetComponents}
 						isRefreshing={targetRefreshing}
+						lastUpdated={lastUpdatedTarget}
 					/>
 				</div>
 			</div>
+		<!-- COMMENTED OUT: Unified View - Keeping only side-by-side view
 		{:else}
-			<!-- Unified View -->
 			<Tabs.Root bind:value={selectedTab}>
 				<Tabs.List class="grid w-full grid-cols-6">
 					<Tabs.Trigger value="all">
@@ -589,6 +680,7 @@
 					{/if}
 				</Tabs.Content>
 			</Tabs.Root>
+		-->
 		{/if}
 	{/if}
 </div>
