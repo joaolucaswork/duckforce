@@ -5,8 +5,9 @@
 	import { Input } from '$lib/components/ui/input';
 	import * as Select from '$lib/components/ui/select';
 	import * as Tooltip from '$lib/components/ui/tooltip';
+	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { Skeleton } from '$lib/components/ui/skeleton';
-	import { Search, Info, RefreshCw } from '@lucide/svelte';
+	import { Search, Info, RefreshCw, Ellipsis } from '@lucide/svelte';
 	import type { ComponentType, SalesforceComponent } from '$lib/types/salesforce';
 	import type { CachedOrganization } from '$lib/types/wizard';
 	import VirtualList from '$lib/components/ui/VirtualList.svelte';
@@ -44,6 +45,7 @@
 
 	let searchQuery = $state('');
 	let selectedTab = $state<ComponentType | 'all'>('all');
+	let showSystemComponents = $state(false);
 
 	// Format timestamp for display
 	function formatTimestamp(date: Date | null): string {
@@ -70,6 +72,49 @@
 		});
 	}
 
+	// Format creation date for display in tooltip
+	function formatCreatedDate(dateString: string | undefined): string {
+		if (!dateString) return 'Unknown';
+
+		const date = new Date(dateString);
+		return date.toLocaleDateString('en-US', {
+			month: '2-digit',
+			day: '2-digit',
+			year: 'numeric'
+		});
+	}
+
+	// Determine if a component is custom (user-created) or system (standard Salesforce)
+	function isCustomComponent(component: SalesforceComponent): boolean {
+		// Components with a namespace that is not null are from managed packages (not custom)
+		if (component.namespace) {
+			return false;
+		}
+
+		// For different component types, check specific indicators
+		switch (component.type) {
+			case 'object':
+				// Custom objects end with __c
+				return component.apiName.endsWith('__c');
+
+			case 'field':
+				// Custom fields end with __c
+				return component.apiName.includes('__c');
+
+			case 'lwc':
+			case 'apex':
+			case 'trigger':
+			case 'visualforce':
+			case 'flow':
+				// These are always custom if they have no namespace
+				// (system components of these types would have a namespace)
+				return true;
+
+			default:
+				return true;
+		}
+	}
+
 	// Memoization: Store filtered results by cache key
 	let filteredComponentsCache = $state<{
 		key: string;
@@ -78,7 +123,7 @@
 
 	// Filter components based on search and tab with memoization
 	const filteredComponents = $derived.by(() => {
-		const cacheKey = `${selectedTab}-${searchQuery}-${components.length}`;
+		const cacheKey = `${selectedTab}-${searchQuery}-${showSystemComponents}-${components.length}`;
 
 		// Check if we can use cached result
 		if (filteredComponentsCache && filteredComponentsCache.key === cacheKey) {
@@ -86,6 +131,11 @@
 		}
 
 		let filtered = components;
+
+		// Filter by custom/system components
+		if (!showSystemComponents) {
+			filtered = filtered.filter(c => isCustomComponent(c));
+		}
 
 		// Filter by type
 		if (selectedTab !== 'all') {
@@ -108,7 +158,7 @@
 
 	// Update cache after filteredComponents is computed
 	$effect(() => {
-		const cacheKey = `${selectedTab}-${searchQuery}-${components.length}`;
+		const cacheKey = `${selectedTab}-${searchQuery}-${showSystemComponents}-${components.length}`;
 		filteredComponentsCache = {
 			key: cacheKey,
 			result: filteredComponents
@@ -117,20 +167,25 @@
 
 	// Memoize component counts
 	let componentCountsCache = $state<{
-		key: number;
+		key: string;
 		result: Record<ComponentType | 'all', number>;
 	} | null>(null);
 
 	const componentCounts = $derived.by(() => {
-		const cacheKey = components.length;
+		const cacheKey = `${components.length}-${showSystemComponents}`;
 
 		// Return cached counts if components haven't changed
 		if (componentCountsCache && componentCountsCache.key === cacheKey) {
 			return componentCountsCache.result;
 		}
 
+		// Filter components based on custom/system setting
+		const componentsToCount = showSystemComponents
+			? components
+			: components.filter(c => isCustomComponent(c));
+
 		const counts: Record<ComponentType | 'all', number> = {
-			all: components.length,
+			all: componentsToCount.length,
 			lwc: 0,
 			apex: 0,
 			object: 0,
@@ -140,7 +195,7 @@
 			flow: 0
 		};
 
-		components.forEach(c => {
+		componentsToCount.forEach(c => {
 			counts[c.type]++;
 		});
 
@@ -150,17 +205,26 @@
 	// Update counts cache after componentCounts is computed
 	$effect(() => {
 		componentCountsCache = {
-			key: components.length,
+			key: `${components.length}-${showSystemComponents}`,
 			result: componentCounts
 		};
 	});
 
-	// Get components for the current tab (filtered by type)
+	// Get components for the current tab (filtered by type and custom/system)
 	const currentTabComponents = $derived(() => {
-		if (selectedTab === 'all') {
-			return components;
+		let filtered = components;
+
+		// Filter by custom/system components
+		if (!showSystemComponents) {
+			filtered = filtered.filter(c => isCustomComponent(c));
 		}
-		return components.filter(c => c.type === selectedTab);
+
+		// Filter by type
+		if (selectedTab !== 'all') {
+			filtered = filtered.filter(c => c.type === selectedTab);
+		}
+
+		return filtered;
 	});
 
 	// Count selected components in current tab
@@ -252,7 +316,7 @@
 				<Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
 				<Input
 					bind:value={searchQuery}
-					placeholder="Search components..."
+					placeholder="Search your created components"
 					class="pl-9 h-9"
 				/>
 			</div>
@@ -328,6 +392,23 @@
 						<RefreshCw class="h-4 w-4 {isRefreshing ? 'animate-spin' : ''}" />
 					</Button>
 				{/if}
+
+				<!-- Options Menu -->
+				<DropdownMenu.Root>
+					<DropdownMenu.Trigger>
+						{#snippet child({ props })}
+							<Button {...props} variant="ghost" size="sm" class="h-8 w-8 p-0">
+								<Ellipsis class="h-4 w-4" />
+								<span class="sr-only">Component options</span>
+							</Button>
+						{/snippet}
+					</DropdownMenu.Trigger>
+					<DropdownMenu.Content align="end" class="w-56">
+						<DropdownMenu.CheckboxItem bind:checked={showSystemComponents}>
+							Show System Components
+						</DropdownMenu.CheckboxItem>
+					</DropdownMenu.Content>
+				</DropdownMenu.Root>
 			</div>
 		</div>
 
@@ -385,7 +466,10 @@
 											{/snippet}
 										</Tooltip.Trigger>
 										<Tooltip.Content side="top">
-											<span class="font-mono">{component.apiName}</span>
+											<div class="flex flex-col gap-1">
+												<span class="font-mono text-xs">API: {component.apiName}</span>
+												<span class="text-xs">Created: {formatCreatedDate(component.metadata?.created_date)}</span>
+											</div>
 										</Tooltip.Content>
 									</Tooltip.Root>
 								</div>
