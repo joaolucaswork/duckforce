@@ -142,10 +142,10 @@
 
 	<!-- Main Content Area -->
 	<Sidebar.Inset>
-		<div class="flex flex-col min-h-screen">
+		<div class="flex flex-col h-screen overflow-hidden">
 			<!-- Top Header (hidden on select-components step) -->
 			{#if wizardStore.state.currentStep !== 'select-components'}
-				<header class="border-b bg-background sticky top-0 z-10">
+				<header class="border-b bg-background flex-shrink-0 z-10">
 					<div class="px-8 py-6 flex items-center justify-between">
 						<div class="flex items-center gap-6">
 							<!-- Logo -->
@@ -192,7 +192,7 @@
 			{/if}
 
 			<!-- Main Content -->
-			<main class="flex-1 flex items-center relative">
+			<main class="flex-1 flex items-center relative min-h-0 overflow-hidden">
 				<!-- Dot Grid Background Pattern -->
 				<svg class="absolute inset-0 h-full w-full pointer-events-none" xmlns="http://www.w3.org/2000/svg">
 					<defs>
@@ -203,7 +203,7 @@
 					<rect width="100%" height="100%" fill="url(#wizard-dot-grid)" />
 				</svg>
 
-				<div class="{wizardStore.state.currentStep === 'select-components' ? 'w-full px-5' : 'max-w-4xl mx-auto px-8'} py-8 pb-24 w-full relative z-10">
+				<div class="{wizardStore.state.currentStep === 'select-components' ? 'w-full h-full px-5' : 'max-w-4xl mx-auto px-8'} py-8 w-full relative z-10 {wizardStore.state.currentStep === 'select-components' ? 'flex flex-col' : ''}">
 					<!-- Step Header: Exibe o número do passo, título e descrição de forma centralizada -->
 					<!-- <div class="mb-10 text-center"> -->
 						<!-- Indicador numérico do passo atual (círculo com número) -->
@@ -221,14 +221,14 @@
 					<!-- </div> -->
 
 					<!-- Step Content -->
-					<div class="space-y-6">
+					<div class="{wizardStore.state.currentStep === 'select-components' ? 'flex-1 flex flex-col min-h-0' : 'space-y-6'}">
 						{@render children()}
 					</div>
 				</div>
 			</main>
 
 			<!-- Fixed Navigation Footer -->
-			<div class="fixed bottom-0 left-0 right-0 z-20 border-t bg-background">
+			<div class="flex-shrink-0 z-20 border-t bg-background">
 				<div class="w-full max-w-6xl mx-auto px-8 py-3 flex items-center justify-end">
 					<Button
 						onclick={handleNext}

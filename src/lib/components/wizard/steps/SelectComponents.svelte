@@ -494,10 +494,10 @@
 	}
 </script>
 
-<div class="space-y-6">
+<div class="flex flex-col gap-6 flex-1 min-h-0">
 	<!-- Info Alert -->
 	{#if showBanner}
-		<Alert.Root class="relative">
+		<Alert.Root class="relative flex-shrink-0">
 			<Alert.Title>Select Components to Migrate</Alert.Title>
 			<Alert.Description class="text-sm pr-8">
 				Select components from either organization to include in the migration. Dependencies will be automatically discovered in the next step.
@@ -564,9 +564,9 @@
 		<!-- Component View -->
 		{#if sourceComponents().length > 0 && targetComponents().length > 0 && sourceOrg() && targetOrg()}
 			<!-- Side-by-Side View -->
-			<div class="grid grid-cols-2 gap-4 h-[600px]">
+			<div class="grid grid-cols-2 gap-4 flex-1 min-h-0">
 				<!-- Source Org Panel -->
-				<div class="border rounded-lg p-4">
+				<div class="border rounded-lg p-4 flex flex-col min-h-0">
 					<ComponentListPanel
 						components={sourceComponents()}
 						selectedIds={selectedIds}
@@ -584,7 +584,7 @@
 				</div>
 
 				<!-- Target Org Panel -->
-				<div class="border rounded-lg p-4">
+				<div class="border rounded-lg p-4 flex flex-col min-h-0">
 					<ComponentListPanel
 						components={targetComponents()}
 						selectedIds={selectedIds}

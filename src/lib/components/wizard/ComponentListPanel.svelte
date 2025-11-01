@@ -356,42 +356,43 @@
 			<VirtualList
 				items={filteredComponents}
 				itemHeight={90}
-				height={500}
+				height={0}
+				scrollbarClass="scrollbar-white"
 			>
 				{#snippet children(component: SalesforceComponent)}
-					<button
-						onclick={() => onToggleComponent(component.id)}
-						class="group w-full flex items-start gap-2 p-2.5 mb-2 rounded-lg border hover:bg-accent transition-colors text-left {isSelected(component.id) ? 'bg-accent' : ''}"
-					>
-						<Checkbox checked={isSelected(component.id)} class="mt-0.5" />
-						<div class="flex-1 min-w-0 flex items-start justify-between gap-3">
-							<div class="flex-1 min-w-0">
-								<p class="font-medium text-sm truncate">{component.name}</p>
-								{#if component.description}
-									<p class="text-xs text-muted-foreground mt-1 line-clamp-2">{component.description}</p>
-								{/if}
+						<button
+							onclick={() => onToggleComponent(component.id)}
+							class="group w-full flex items-start gap-2 p-2.5 mb-2 rounded-lg border hover:bg-accent transition-colors text-left {isSelected(component.id) ? 'bg-accent' : ''}"
+						>
+							<Checkbox checked={isSelected(component.id)} class="mt-0.5" />
+							<div class="flex-1 min-w-0 flex items-start justify-between gap-3">
+								<div class="flex-1 min-w-0">
+									<p class="font-medium text-sm truncate">{component.name}</p>
+									{#if component.description}
+										<p class="text-xs text-muted-foreground mt-1 line-clamp-2">{component.description}</p>
+									{/if}
+								</div>
+								<div class="flex items-center gap-1.5 flex-shrink-0">
+									<Badge variant="outline" class="text-xs font-mono">
+										{component.type.toUpperCase()}
+									</Badge>
+									<Tooltip.Root>
+										<Tooltip.Trigger>
+											{#snippet child({ props })}
+												<button {...props} class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100" type="button">
+													<Info class="h-3.5 w-3.5" />
+												</button>
+											{/snippet}
+										</Tooltip.Trigger>
+										<Tooltip.Content side="top">
+											<span class="font-mono">{component.apiName}</span>
+										</Tooltip.Content>
+									</Tooltip.Root>
+								</div>
 							</div>
-							<div class="flex items-center gap-1.5 flex-shrink-0">
-								<Badge variant="outline" class="text-xs font-mono">
-									{component.type.toUpperCase()}
-								</Badge>
-								<Tooltip.Root>
-									<Tooltip.Trigger>
-										{#snippet child({ props })}
-											<button {...props} class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100" type="button">
-												<Info class="h-3.5 w-3.5" />
-											</button>
-										{/snippet}
-									</Tooltip.Trigger>
-									<Tooltip.Content side="top">
-										<span class="font-mono">{component.apiName}</span>
-									</Tooltip.Content>
-								</Tooltip.Root>
-							</div>
-						</div>
-					</button>
-				{/snippet}
-			</VirtualList>
+						</button>
+					{/snippet}
+				</VirtualList>
 		{/if}
 	</div>
 </div>
