@@ -170,6 +170,39 @@
   .dark .scrollbar-custom::-webkit-scrollbar-thumb:hover {
     background-color: oklch(0.556 0 0 / 0.5);
   }
+
+  /* White scrollbar with grab cursor for component lists */
+  .scrollbar-white {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.5) transparent;
+    overflow-y: scroll !important; /* Force scrollbar to always show */
+  }
+
+  .scrollbar-white::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  .scrollbar-white::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-white::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.5);
+    border-radius: 5px;
+    cursor: grab;
+    min-height: 40px; /* Ensure scrollbar thumb is always visible */
+  }
+
+  .scrollbar-white::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(255, 255, 255, 0.7);
+    cursor: grab;
+  }
+
+  .scrollbar-white::-webkit-scrollbar-thumb:active {
+    background-color: rgba(255, 255, 255, 0.9);
+    cursor: grabbing;
+  }
 }
 
 /* Premium sidebar animation - smooth ease similar to ChatGPT */

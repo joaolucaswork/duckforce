@@ -20,15 +20,15 @@ export async function fetchLightningComponents(conn: Connection): Promise<Compon
 		
 		// Query LWC bundles using Tooling API
 		const result = await conn.tooling.query(
-			`SELECT Id, DeveloperName, NamespacePrefix, Description, MasterLabel 
-			 FROM LightningComponentBundle 
+			`SELECT Id, DeveloperName, NamespacePrefix, Description, MasterLabel, CreatedDate
+			 FROM LightningComponentBundle
 			 WHERE ManageableState IN ('unmanaged', 'installed')
 			 ORDER BY DeveloperName`
 		);
 
 		const components: ComponentInsert[] = result.records.map((record: any) => ({
 			component_id: record.Id,
-			api_name: record.NamespacePrefix 
+			api_name: record.NamespacePrefix
 				? `${record.NamespacePrefix}__${record.DeveloperName}`
 				: record.DeveloperName,
 			name: record.MasterLabel || record.DeveloperName,
@@ -37,7 +37,8 @@ export async function fetchLightningComponents(conn: Connection): Promise<Compon
 			namespace: record.NamespacePrefix || null,
 			metadata: {
 				developername: record.DeveloperName,
-				masterlabel: record.MasterLabel
+				masterlabel: record.MasterLabel,
+				created_date: record.CreatedDate
 			},
 			dependencies: [],
 			dependents: []
@@ -63,15 +64,15 @@ export async function fetchApexClasses(conn: Connection): Promise<ComponentInser
 		
 		// Query Apex classes using Tooling API
 		const result = await conn.tooling.query(
-			`SELECT Id, Name, NamespacePrefix, ApiVersion, Status, IsValid, LengthWithoutComments
-			 FROM ApexClass 
+			`SELECT Id, Name, NamespacePrefix, ApiVersion, Status, IsValid, LengthWithoutComments, CreatedDate
+			 FROM ApexClass
 			 WHERE ManageableState IN ('unmanaged', 'installed')
 			 ORDER BY Name`
 		);
 
 		const components: ComponentInsert[] = result.records.map((record: any) => ({
 			component_id: record.Id,
-			api_name: record.NamespacePrefix 
+			api_name: record.NamespacePrefix
 				? `${record.NamespacePrefix}__${record.Name}`
 				: record.Name,
 			name: record.Name,
@@ -82,7 +83,8 @@ export async function fetchApexClasses(conn: Connection): Promise<ComponentInser
 				apiversion: record.ApiVersion,
 				status: record.Status,
 				isvalid: record.IsValid,
-				lengthwithoutcomments: record.LengthWithoutComments
+				lengthwithoutcomments: record.LengthWithoutComments,
+				created_date: record.CreatedDate
 			},
 			dependencies: [],
 			dependents: []
@@ -109,7 +111,7 @@ export async function fetchCustomObjects(conn: Connection): Promise<ComponentIns
 		// Query custom objects using Tooling API
 		// Note: CustomObject doesn't have MasterLabel field, only DeveloperName
 		const result = await conn.tooling.query(
-			`SELECT Id, DeveloperName, NamespacePrefix, Description
+			`SELECT Id, DeveloperName, NamespacePrefix, Description, CreatedDate
 			 FROM CustomObject
 			 WHERE ManageableState IN ('unmanaged', 'installed')
 			 ORDER BY DeveloperName`
@@ -125,7 +127,8 @@ export async function fetchCustomObjects(conn: Connection): Promise<ComponentIns
 			description: record.Description || null,
 			namespace: record.NamespacePrefix || null,
 			metadata: {
-				developername: record.DeveloperName
+				developername: record.DeveloperName,
+				created_date: record.CreatedDate
 			},
 			dependencies: [],
 			dependents: []
@@ -153,7 +156,7 @@ export async function fetchCustomFields(conn: Connection): Promise<ComponentInse
 		// Note: CustomField in Tooling API has very limited fields available
 		// We can only reliably query: Id, DeveloperName, NamespacePrefix, TableEnumOrId
 		const result = await conn.tooling.query(
-			`SELECT Id, DeveloperName, NamespacePrefix, TableEnumOrId
+			`SELECT Id, DeveloperName, NamespacePrefix, TableEnumOrId, CreatedDate
 			 FROM CustomField
 			 WHERE ManageableState IN ('unmanaged', 'installed')
 			 ORDER BY TableEnumOrId, DeveloperName
@@ -171,7 +174,8 @@ export async function fetchCustomFields(conn: Connection): Promise<ComponentInse
 			namespace: record.NamespacePrefix || null,
 			metadata: {
 				developername: record.DeveloperName,
-				tableenumorid: record.TableEnumOrId
+				tableenumorid: record.TableEnumOrId,
+				created_date: record.CreatedDate
 			},
 			dependencies: [],
 			dependents: []
@@ -197,15 +201,15 @@ export async function fetchTriggers(conn: Connection): Promise<ComponentInsert[]
 		
 		// Query triggers using Tooling API
 		const result = await conn.tooling.query(
-			`SELECT Id, Name, NamespacePrefix, TableEnumOrId, ApiVersion, Status, IsValid
-			 FROM ApexTrigger 
+			`SELECT Id, Name, NamespacePrefix, TableEnumOrId, ApiVersion, Status, IsValid, CreatedDate
+			 FROM ApexTrigger
 			 WHERE ManageableState IN ('unmanaged', 'installed')
 			 ORDER BY Name`
 		);
 
 		const components: ComponentInsert[] = result.records.map((record: any) => ({
 			component_id: record.Id,
-			api_name: record.NamespacePrefix 
+			api_name: record.NamespacePrefix
 				? `${record.NamespacePrefix}__${record.Name}`
 				: record.Name,
 			name: record.Name,
@@ -216,7 +220,8 @@ export async function fetchTriggers(conn: Connection): Promise<ComponentInsert[]
 				tableenumorid: record.TableEnumOrId,
 				apiversion: record.ApiVersion,
 				status: record.Status,
-				isvalid: record.IsValid
+				isvalid: record.IsValid,
+				created_date: record.CreatedDate
 			},
 			dependencies: [],
 			dependents: []
@@ -243,7 +248,7 @@ export async function fetchVisualforcePages(conn: Connection): Promise<Component
 		// Query Visualforce pages using Tooling API
 		// Note: ApexPage doesn't have MasterLabel in Tooling API, only Name
 		const result = await conn.tooling.query(
-			`SELECT Id, Name, NamespacePrefix, ApiVersion, Description
+			`SELECT Id, Name, NamespacePrefix, ApiVersion, Description, CreatedDate
 			 FROM ApexPage
 			 WHERE ManageableState IN ('unmanaged', 'installed')
 			 ORDER BY Name`
@@ -260,7 +265,8 @@ export async function fetchVisualforcePages(conn: Connection): Promise<Component
 			namespace: record.NamespacePrefix || null,
 			metadata: {
 				name: record.Name,
-				apiversion: record.ApiVersion
+				apiversion: record.ApiVersion,
+				created_date: record.CreatedDate
 			},
 			dependencies: [],
 			dependents: []
@@ -287,7 +293,7 @@ export async function fetchFlows(conn: Connection): Promise<ComponentInsert[]> {
 		// Query flows using Tooling API
 		// Note: FlowDefinition has limited fields available in Tooling API
 		const result = await conn.tooling.query(
-			`SELECT Id, DeveloperName, NamespacePrefix, Description, ActiveVersionId
+			`SELECT Id, DeveloperName, NamespacePrefix, Description, ActiveVersionId, CreatedDate
 			 FROM FlowDefinition
 			 WHERE ManageableState IN ('unmanaged', 'installed')
 			 ORDER BY DeveloperName`
@@ -304,7 +310,8 @@ export async function fetchFlows(conn: Connection): Promise<ComponentInsert[]> {
 			namespace: record.NamespacePrefix || null,
 			metadata: {
 				developername: record.DeveloperName,
-				activeversionid: record.ActiveVersionId
+				activeversionid: record.ActiveVersionId,
+				created_date: record.CreatedDate
 			},
 			dependencies: [],
 			dependents: []

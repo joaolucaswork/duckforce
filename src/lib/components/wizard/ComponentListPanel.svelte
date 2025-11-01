@@ -5,7 +5,9 @@
 	import { Input } from '$lib/components/ui/input';
 	import * as Select from '$lib/components/ui/select';
 	import * as Tooltip from '$lib/components/ui/tooltip';
-	import { Search, Info, RefreshCw } from '@lucide/svelte';
+	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import { Skeleton } from '$lib/components/ui/skeleton';
+	import { Search, Info, RefreshCw, Ellipsis } from '@lucide/svelte';
 	import type { ComponentType, SalesforceComponent } from '$lib/types/salesforce';
 	import type { CachedOrganization } from '$lib/types/wizard';
 	import VirtualList from '$lib/components/ui/VirtualList.svelte';
@@ -23,6 +25,7 @@
 		isSelected: (componentId: string) => boolean;
 		onRefresh?: () => void | Promise<void>;
 		isRefreshing?: boolean;
+		lastUpdated?: Date | null;
 	}
 
 	let {
@@ -36,11 +39,81 @@
 		// onDeselectAll, // Not used anymore - using onToggleComponent instead
 		isSelected,
 		onRefresh,
-		isRefreshing = false
+		isRefreshing = false,
+		lastUpdated = null
 	}: Props = $props();
 
 	let searchQuery = $state('');
 	let selectedTab = $state<ComponentType | 'all'>('all');
+	let showSystemComponents = $state(false);
+
+	// Format timestamp for display
+	function formatTimestamp(date: Date | null): string {
+		if (!date) return '';
+
+		const now = new Date();
+		const diffMs = now.getTime() - date.getTime();
+		const diffMins = Math.floor(diffMs / 60000);
+
+		// If less than 1 minute ago, show "Just now"
+		if (diffMins < 1) return 'Just now';
+
+		// If less than 60 minutes ago, show "X min ago"
+		if (diffMins < 60) return `${diffMins} min ago`;
+
+		// Otherwise show full date and time
+		return date.toLocaleString('en-US', {
+			month: 'short',
+			day: 'numeric',
+			year: 'numeric',
+			hour: 'numeric',
+			minute: '2-digit',
+			hour12: true
+		});
+	}
+
+	// Format creation date for display in tooltip
+	function formatCreatedDate(dateString: string | undefined): string {
+		if (!dateString) return 'Unknown';
+
+		const date = new Date(dateString);
+		return date.toLocaleDateString('en-US', {
+			month: '2-digit',
+			day: '2-digit',
+			year: 'numeric'
+		});
+	}
+
+	// Determine if a component is custom (user-created) or system (standard Salesforce)
+	function isCustomComponent(component: SalesforceComponent): boolean {
+		// Components with a namespace that is not null are from managed packages (not custom)
+		if (component.namespace) {
+			return false;
+		}
+
+		// For different component types, check specific indicators
+		switch (component.type) {
+			case 'object':
+				// Custom objects end with __c
+				return component.apiName.endsWith('__c');
+
+			case 'field':
+				// Custom fields end with __c
+				return component.apiName.includes('__c');
+
+			case 'lwc':
+			case 'apex':
+			case 'trigger':
+			case 'visualforce':
+			case 'flow':
+				// These are always custom if they have no namespace
+				// (system components of these types would have a namespace)
+				return true;
+
+			default:
+				return true;
+		}
+	}
 
 	// Memoization: Store filtered results by cache key
 	let filteredComponentsCache = $state<{
@@ -50,7 +123,7 @@
 
 	// Filter components based on search and tab with memoization
 	const filteredComponents = $derived.by(() => {
-		const cacheKey = `${selectedTab}-${searchQuery}-${components.length}`;
+		const cacheKey = `${selectedTab}-${searchQuery}-${showSystemComponents}-${components.length}`;
 
 		// Check if we can use cached result
 		if (filteredComponentsCache && filteredComponentsCache.key === cacheKey) {
@@ -58,6 +131,11 @@
 		}
 
 		let filtered = components;
+
+		// Filter by custom/system components
+		if (!showSystemComponents) {
+			filtered = filtered.filter(c => isCustomComponent(c));
+		}
 
 		// Filter by type
 		if (selectedTab !== 'all') {
@@ -80,7 +158,7 @@
 
 	// Update cache after filteredComponents is computed
 	$effect(() => {
-		const cacheKey = `${selectedTab}-${searchQuery}-${components.length}`;
+		const cacheKey = `${selectedTab}-${searchQuery}-${showSystemComponents}-${components.length}`;
 		filteredComponentsCache = {
 			key: cacheKey,
 			result: filteredComponents
@@ -89,20 +167,25 @@
 
 	// Memoize component counts
 	let componentCountsCache = $state<{
-		key: number;
+		key: string;
 		result: Record<ComponentType | 'all', number>;
 	} | null>(null);
 
 	const componentCounts = $derived.by(() => {
-		const cacheKey = components.length;
+		const cacheKey = `${components.length}-${showSystemComponents}`;
 
 		// Return cached counts if components haven't changed
 		if (componentCountsCache && componentCountsCache.key === cacheKey) {
 			return componentCountsCache.result;
 		}
 
+		// Filter components based on custom/system setting
+		const componentsToCount = showSystemComponents
+			? components
+			: components.filter(c => isCustomComponent(c));
+
 		const counts: Record<ComponentType | 'all', number> = {
-			all: components.length,
+			all: componentsToCount.length,
 			lwc: 0,
 			apex: 0,
 			object: 0,
@@ -112,7 +195,7 @@
 			flow: 0
 		};
 
-		components.forEach(c => {
+		componentsToCount.forEach(c => {
 			counts[c.type]++;
 		});
 
@@ -122,17 +205,26 @@
 	// Update counts cache after componentCounts is computed
 	$effect(() => {
 		componentCountsCache = {
-			key: components.length,
+			key: `${components.length}-${showSystemComponents}`,
 			result: componentCounts
 		};
 	});
 
-	// Get components for the current tab (filtered by type)
+	// Get components for the current tab (filtered by type and custom/system)
 	const currentTabComponents = $derived(() => {
-		if (selectedTab === 'all') {
-			return components;
+		let filtered = components;
+
+		// Filter by custom/system components
+		if (!showSystemComponents) {
+			filtered = filtered.filter(c => isCustomComponent(c));
 		}
-		return components.filter(c => c.type === selectedTab);
+
+		// Filter by type
+		if (selectedTab !== 'all') {
+			filtered = filtered.filter(c => c.type === selectedTab);
+		}
+
+		return filtered;
 	});
 
 	// Count selected components in current tab
@@ -224,7 +316,7 @@
 				<Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
 				<Input
 					bind:value={searchQuery}
-					placeholder="Search components..."
+					placeholder="Search your created components"
 					class="pl-9 h-9"
 				/>
 			</div>
@@ -264,7 +356,7 @@
 
 	<!-- Select All Checkbox and Component List -->
 	<div class="flex-1 flex flex-col min-h-0">
-		<!-- Select All Checkbox and Selection Count -->
+		<!-- Select All Checkbox, Selection Count, Timestamp, and Refresh Button -->
 		<div class="flex items-start justify-between mb-2">
 			<button
 				onclick={handleSelectAllToggle}
@@ -282,21 +374,62 @@
 				</span>
 			</button>
 
-			{#if onRefresh}
-				<Button
-					variant="ghost"
-					size="sm"
-					onclick={onRefresh}
-					disabled={isRefreshing}
-					class="h-8"
-				>
-					<RefreshCw class="h-4 w-4 {isRefreshing ? 'animate-spin' : ''}" />
-				</Button>
-			{/if}
+			<div class="flex items-center gap-2">
+				{#if lastUpdated}
+					<span class="text-xs text-muted-foreground">
+						Updated: {formatTimestamp(lastUpdated)}
+					</span>
+				{/if}
+
+				{#if onRefresh}
+					<Button
+						variant="ghost"
+						size="sm"
+						onclick={onRefresh}
+						disabled={isRefreshing}
+						class="h-8"
+					>
+						<RefreshCw class="h-4 w-4 {isRefreshing ? 'animate-spin' : ''}" />
+					</Button>
+				{/if}
+
+				<!-- Options Menu -->
+				<DropdownMenu.Root>
+					<DropdownMenu.Trigger>
+						{#snippet child({ props })}
+							<Button {...props} variant="ghost" size="sm" class="h-8 w-8 p-0">
+								<Ellipsis class="h-4 w-4" />
+								<span class="sr-only">Component options</span>
+							</Button>
+						{/snippet}
+					</DropdownMenu.Trigger>
+					<DropdownMenu.Content align="end" class="w-56">
+						<DropdownMenu.CheckboxItem bind:checked={showSystemComponents}>
+							Show System Components
+						</DropdownMenu.CheckboxItem>
+					</DropdownMenu.Content>
+				</DropdownMenu.Root>
+			</div>
 		</div>
 
 		<!-- Component List -->
-		{#if filteredComponents.length === 0}
+		{#if isRefreshing}
+			<!-- Skeleton Loading State -->
+			<div class="space-y-2">
+				{#each Array(8) as _}
+					<div class="flex items-start gap-2 p-2.5 rounded-lg border">
+						<Skeleton class="size-4 rounded mt-0.5 flex-shrink-0" />
+						<div class="flex-1 min-w-0 flex items-start justify-between gap-3">
+							<div class="flex-1 min-w-0 space-y-2">
+								<Skeleton class="h-4 w-3/4" />
+								<Skeleton class="h-3 w-full" />
+							</div>
+							<Skeleton class="h-5 w-16 flex-shrink-0" />
+						</div>
+					</div>
+				{/each}
+			</div>
+		{:else if filteredComponents.length === 0}
 			<div class="text-center py-8 text-muted-foreground">
 				<p class="text-sm">No components found</p>
 			</div>
@@ -304,42 +437,46 @@
 			<VirtualList
 				items={filteredComponents}
 				itemHeight={90}
-				height={500}
+				height={0}
+				scrollbarClass="scrollbar-white"
 			>
 				{#snippet children(component: SalesforceComponent)}
-					<button
-						onclick={() => onToggleComponent(component.id)}
-						class="group w-full flex items-start gap-2 p-2.5 mb-2 rounded-lg border hover:bg-accent transition-colors text-left {isSelected(component.id) ? 'bg-accent' : ''}"
-					>
-						<Checkbox checked={isSelected(component.id)} class="mt-0.5" />
-						<div class="flex-1 min-w-0 flex items-start justify-between gap-3">
-							<div class="flex-1 min-w-0">
-								<p class="font-medium text-sm truncate">{component.name}</p>
-								{#if component.description}
-									<p class="text-xs text-muted-foreground mt-1 line-clamp-2">{component.description}</p>
-								{/if}
+						<button
+							onclick={() => onToggleComponent(component.id)}
+							class="group w-full flex items-start gap-2 p-2.5 mb-2 rounded-lg border hover:bg-accent transition-colors text-left {isSelected(component.id) ? 'bg-accent' : ''}"
+						>
+							<Checkbox checked={isSelected(component.id)} class="mt-0.5" />
+							<div class="flex-1 min-w-0 flex items-start justify-between gap-3">
+								<div class="flex-1 min-w-0">
+									<p class="font-medium text-sm truncate">{component.name}</p>
+									{#if component.description}
+										<p class="text-xs text-muted-foreground mt-1 line-clamp-2">{component.description}</p>
+									{/if}
+								</div>
+								<div class="flex items-center gap-1.5 flex-shrink-0">
+									<Badge variant="outline" class="text-xs font-mono">
+										{component.type.toUpperCase()}
+									</Badge>
+									<Tooltip.Root>
+										<Tooltip.Trigger>
+											{#snippet child({ props })}
+												<button {...props} class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100" type="button">
+													<Info class="h-3.5 w-3.5" />
+												</button>
+											{/snippet}
+										</Tooltip.Trigger>
+										<Tooltip.Content side="top">
+											<div class="flex flex-col gap-1">
+												<span class="font-mono text-xs">API: {component.apiName}</span>
+												<span class="text-xs">Created: {formatCreatedDate(component.metadata?.created_date)}</span>
+											</div>
+										</Tooltip.Content>
+									</Tooltip.Root>
+								</div>
 							</div>
-							<div class="flex items-center gap-1.5 flex-shrink-0">
-								<Badge variant="outline" class="text-xs font-mono">
-									{component.type.toUpperCase()}
-								</Badge>
-								<Tooltip.Root>
-									<Tooltip.Trigger>
-										{#snippet child({ props })}
-											<button {...props} class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100" type="button">
-												<Info class="h-3.5 w-3.5" />
-											</button>
-										{/snippet}
-									</Tooltip.Trigger>
-									<Tooltip.Content side="top">
-										<span class="font-mono">{component.apiName}</span>
-									</Tooltip.Content>
-								</Tooltip.Root>
-							</div>
-						</div>
-					</button>
-				{/snippet}
-			</VirtualList>
+						</button>
+					{/snippet}
+				</VirtualList>
 		{/if}
 	</div>
 </div>
