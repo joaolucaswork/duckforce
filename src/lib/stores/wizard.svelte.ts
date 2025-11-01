@@ -290,6 +290,42 @@ class WizardStore {
 		this.state.componentSelection.isLoading = false;
 	}
 
+	// NEW: Add components from a specific org (for multi-org display)
+	addComponentsFromOrg(components: SalesforceComponent[], orgId: string, orgName: string) {
+		// Tag components with their source org
+		const taggedComponents = components.map(comp => ({
+			...comp,
+			sourceOrgId: orgId,
+			sourceOrgName: orgName
+		}));
+
+		// Merge with existing components, avoiding duplicates
+		const existingIds = new Set(this.state.componentSelection.availableComponents.map(c => c.id));
+		const newComponents = taggedComponents.filter(c => !existingIds.has(c.id));
+
+		this.state.componentSelection.availableComponents = [
+			...this.state.componentSelection.availableComponents,
+			...newComponents
+		];
+	}
+
+	// NEW: Replace all components with components from multiple orgs
+	setComponentsFromMultipleOrgs(componentsByOrg: Array<{ orgId: string; orgName: string; components: SalesforceComponent[] }>) {
+		const allComponents: SalesforceComponent[] = [];
+
+		componentsByOrg.forEach(({ orgId, orgName, components }) => {
+			const taggedComponents = components.map(comp => ({
+				...comp,
+				sourceOrgId: orgId,
+				sourceOrgName: orgName
+			}));
+			allComponents.push(...taggedComponents);
+		});
+
+		this.state.componentSelection.availableComponents = allComponents;
+		this.state.componentSelection.isLoading = false;
+	}
+
 	setComponentsLoading(isLoading: boolean) {
 		this.state.componentSelection.isLoading = isLoading;
 		if (isLoading) {
@@ -303,26 +339,34 @@ class WizardStore {
 	}
 
 	toggleComponentSelection(componentId: string) {
-		if (this.state.componentSelection.selectedIds.has(componentId)) {
-			this.state.componentSelection.selectedIds.delete(componentId);
+		// Create a new Set to trigger Svelte reactivity
+		const newSelectedIds = new Set(this.state.componentSelection.selectedIds);
+
+		if (newSelectedIds.has(componentId)) {
+			newSelectedIds.delete(componentId);
 		} else {
-			this.state.componentSelection.selectedIds.add(componentId);
+			newSelectedIds.add(componentId);
 		}
-		
-		if (this.state.componentSelection.selectedIds.size > 0) {
+
+		this.state.componentSelection.selectedIds = newSelectedIds;
+
+		if (newSelectedIds.size > 0) {
 			this.markStepComplete('select-components');
 		}
 	}
 
 	selectAllComponents() {
-		this.state.componentSelection.availableComponents.forEach(component => {
-			this.state.componentSelection.selectedIds.add(component.id);
-		});
+		// Create a new Set with all component IDs to trigger Svelte reactivity
+		const newSelectedIds = new Set(
+			this.state.componentSelection.availableComponents.map(component => component.id)
+		);
+		this.state.componentSelection.selectedIds = newSelectedIds;
 		this.markStepComplete('select-components');
 	}
 
 	deselectAllComponents() {
-		this.state.componentSelection.selectedIds.clear();
+		// Create a new empty Set to trigger Svelte reactivity
+		this.state.componentSelection.selectedIds = new Set();
 	}
 
 	// Dependency Review methods
