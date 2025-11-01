@@ -1,28 +1,38 @@
 <script lang="ts">
 	import { Badge } from '$lib/components/ui/badge';
+	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Input } from '$lib/components/ui/input';
 	import * as Tabs from '$lib/components/ui/tabs';
-	import { Search } from '@lucide/svelte';
+	import * as Tooltip from '$lib/components/ui/tooltip';
+	import { Search, Info } from '@lucide/svelte';
 	import type { ComponentType, SalesforceComponent } from '$lib/types/salesforce';
+	import type { CachedOrganization } from '$lib/types/wizard';
 	import VirtualList from '$lib/components/ui/VirtualList.svelte';
+	import OrganizationCard from './OrganizationCard.svelte';
 
 	interface Props {
 		components: SalesforceComponent[];
 		selectedIds: Set<string>;
-		orgName: string;
-		orgColor?: string;
+		orgId: string;
+		organization: CachedOrganization;
+		role: 'source' | 'target';
 		onToggleComponent: (componentId: string) => void;
+		onSelectAll: (orgId: string) => void;
+		onDeselectAll: (orgId: string) => void;
 		isSelected: (componentId: string) => boolean;
 	}
 
-	let { 
-		components, 
-		selectedIds, 
-		orgName, 
-		orgColor,
-		onToggleComponent, 
-		isSelected 
+	let {
+		components,
+		selectedIds,
+		orgId,
+		organization,
+		role,
+		onToggleComponent,
+		onSelectAll,
+		onDeselectAll,
+		isSelected
 	}: Props = $props();
 
 	let searchQuery = $state('');
@@ -116,24 +126,17 @@
 	const selectedCount = $derived(() => {
 		return components.filter(c => selectedIds.has(c.id)).length;
 	});
+
+	// Track if any components are selected for this org
+	const hasSelection = $derived(selectedCount() > 0);
 </script>
 
 <div class="space-y-4 h-full flex flex-col">
+	<!-- Organization Card -->
+	<OrganizationCard {organization} {role} />
+
 	<!-- Panel Header -->
 	<div class="space-y-3">
-		<div class="flex items-center justify-between">
-			<div class="flex items-center gap-2">
-				<div 
-					class="w-3 h-3 rounded-full"
-					style="background-color: {orgColor || '#6b7280'};"
-				></div>
-				<h3 class="font-medium text-sm">{orgName}</h3>
-			</div>
-			<Badge variant="outline" class="text-xs">
-				{componentCounts.all} total
-			</Badge>
-		</div>
-
 		<!-- Search -->
 		<div class="relative">
 			<Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -144,12 +147,34 @@
 			/>
 		</div>
 
-		<!-- Selection Summary -->
-		<div class="flex items-center justify-between p-2 bg-muted rounded-lg">
-			<p class="text-xs font-medium">
-				{selectedCount()} selected
-			</p>
-		</div>
+		<!-- Selection Summary and Actions (only shown when components are selected) -->
+		{#if hasSelection}
+			<div class="flex items-center justify-between p-2 bg-muted rounded-lg">
+				<div class="flex items-center gap-3">
+					<p class="text-xs font-medium">
+						{selectedCount()} of {componentCounts.all} selected
+					</p>
+				</div>
+				<div class="flex gap-1.5">
+					<Button
+						variant="ghost"
+						size="sm"
+						class="h-7 text-xs px-2"
+						onclick={() => onSelectAll(orgId)}
+					>
+						Select All
+					</Button>
+					<Button
+						variant="ghost"
+						size="sm"
+						class="h-7 text-xs px-2"
+						onclick={() => onDeselectAll(orgId)}
+					>
+						Deselect All
+					</Button>
+				</div>
+			</div>
+		{/if}
 	</div>
 
 	<!-- Component Tabs -->
@@ -183,7 +208,7 @@
 					{#snippet children(component: SalesforceComponent)}
 						<button
 							onclick={() => onToggleComponent(component.id)}
-							class="w-full flex items-start gap-2 p-2.5 mb-2 rounded-lg border hover:bg-accent transition-colors text-left"
+							class="group w-full flex items-start gap-2 p-2.5 mb-2 rounded-lg border hover:bg-accent transition-colors text-left {isSelected(component.id) ? 'bg-accent' : ''}"
 						>
 							<Checkbox checked={isSelected(component.id)} class="mt-0.5" />
 							<div class="flex-1 min-w-0">
@@ -192,16 +217,22 @@
 										{component.type.toUpperCase()}
 									</Badge>
 									<p class="font-medium text-sm truncate">{component.name}</p>
+									<Tooltip.Root>
+										<Tooltip.Trigger>
+											{#snippet child({ props })}
+												<button {...props} class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100" type="button">
+													<Info class="h-3.5 w-3.5" />
+												</button>
+											{/snippet}
+										</Tooltip.Trigger>
+										<Tooltip.Content side="top">
+											<span class="font-mono">{component.apiName}</span>
+										</Tooltip.Content>
+									</Tooltip.Root>
 								</div>
-								<p class="text-xs text-muted-foreground truncate font-mono">{component.apiName}</p>
 								{#if component.description}
 									<p class="text-xs text-muted-foreground mt-1 line-clamp-2">{component.description}</p>
 								{/if}
-								<div class="flex items-center gap-2 mt-1">
-									<span class="text-xs text-muted-foreground font-mono">
-										{component.dependencies.length} dep{component.dependencies.length !== 1 ? 's' : ''}
-									</span>
-								</div>
 							</div>
 						</button>
 					{/snippet}

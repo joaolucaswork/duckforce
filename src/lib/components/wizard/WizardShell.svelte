@@ -143,51 +143,53 @@
 	<!-- Main Content Area -->
 	<Sidebar.Inset>
 		<div class="flex flex-col min-h-screen">
-			<!-- Top Header -->
-			<header class="border-b bg-background sticky top-0 z-10">
-				<div class="px-8 py-6 flex items-center justify-between">
-					<div class="flex items-center gap-6">
-						<!-- Logo -->
-						<a href="/" class="flex-shrink-0">
-							<Logo size="md" showText={false} />
-						</a>
+			<!-- Top Header (hidden on select-components step) -->
+			{#if wizardStore.state.currentStep !== 'select-components'}
+				<header class="border-b bg-background sticky top-0 z-10">
+					<div class="px-8 py-6 flex items-center justify-between">
+						<div class="flex items-center gap-6">
+							<!-- Logo -->
+							<a href="/" class="flex-shrink-0">
+								<Logo size="md" showText={false} />
+							</a>
 
-						<!-- Step Title and Description -->
-						<div class="flex flex-col">
-							<div class="flex items-center gap-2">
-								<h1 class="text-2xl font-bold tracking-tight text-foreground">
-									{currentStepConfig.title}
-								</h1>
+							<!-- Step Title and Description -->
+							<div class="flex flex-col">
+								<div class="flex items-center gap-2">
+									<h1 class="text-2xl font-bold tracking-tight text-foreground">
+										{currentStepConfig.title}
+									</h1>
 
-								<!-- Info Tooltip -->
-								<Tooltip.Root>
-									<Tooltip.Trigger>
-										<div class="p-1 hover:bg-muted rounded-md transition-colors">
-											<Info class="h-4 w-4 text-muted-foreground" />
-										</div>
-									</Tooltip.Trigger>
-									<Tooltip.Content class="max-w-sm">
-										<div class="space-y-1">
-											<div class="font-semibold">Step {currentStepConfig.order} of {WIZARD_STEPS.length}</div>
-											<p class="opacity-70 leading-relaxed">{currentStepConfig.description}</p>
-										</div>
-									</Tooltip.Content>
-								</Tooltip.Root>
+									<!-- Info Tooltip -->
+									<Tooltip.Root>
+										<Tooltip.Trigger>
+											<div class="p-1 hover:bg-muted rounded-md transition-colors">
+												<Info class="h-4 w-4 text-muted-foreground" />
+											</div>
+										</Tooltip.Trigger>
+										<Tooltip.Content class="max-w-sm">
+											<div class="space-y-1">
+												<div class="font-semibold">Step {currentStepConfig.order} of {WIZARD_STEPS.length}</div>
+												<p class="opacity-70 leading-relaxed">{currentStepConfig.description}</p>
+											</div>
+										</Tooltip.Content>
+									</Tooltip.Root>
+								</div>
+
+								{#if currentStepConfig.description}
+									<p class="text-sm text-muted-foreground mt-0.5">
+										{currentStepConfig.description}
+									</p>
+								{/if}
 							</div>
-
-							{#if currentStepConfig.description}
-								<p class="text-sm text-muted-foreground mt-0.5">
-									{currentStepConfig.description}
-								</p>
-							{/if}
 						</div>
-					</div>
 
-					<Button variant="ghost" size="icon" href="/">
-						<X class="w-5 h-5" />
-					</Button>
-				</div>
-			</header>
+						<Button variant="ghost" size="icon" href="/">
+							<X class="w-5 h-5" />
+						</Button>
+					</div>
+				</header>
+			{/if}
 
 			<!-- Main Content -->
 			<main class="flex-1 overflow-auto flex items-center relative">

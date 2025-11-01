@@ -370,6 +370,34 @@ class WizardStore {
 		this.state.componentSelection.selectedIds = new Set();
 	}
 
+	// Select all components from a specific org
+	selectAllComponentsFromOrg(orgId: string) {
+		const newSelectedIds = new Set(this.state.componentSelection.selectedIds);
+
+		// Add all components from the specified org
+		this.state.componentSelection.availableComponents
+			.filter(component => component.sourceOrgId === orgId)
+			.forEach(component => newSelectedIds.add(component.id));
+
+		this.state.componentSelection.selectedIds = newSelectedIds;
+
+		if (newSelectedIds.size > 0) {
+			this.markStepComplete('select-components');
+		}
+	}
+
+	// Deselect all components from a specific org
+	deselectAllComponentsFromOrg(orgId: string) {
+		const newSelectedIds = new Set(this.state.componentSelection.selectedIds);
+
+		// Remove all components from the specified org
+		this.state.componentSelection.availableComponents
+			.filter(component => component.sourceOrgId === orgId)
+			.forEach(component => newSelectedIds.delete(component.id));
+
+		this.state.componentSelection.selectedIds = newSelectedIds;
+	}
+
 	// Dependency Review methods
 	setDependencyScanning(isScanning: boolean) {
 		this.state.dependencyReview.isScanning = isScanning;
