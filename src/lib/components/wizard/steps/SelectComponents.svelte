@@ -442,22 +442,22 @@
 			<Tabs.Root bind:value={selectedTab}>
 				<Tabs.List class="grid w-full grid-cols-6">
 					<Tabs.Trigger value="all">
-						All ({componentCounts.all})
+						All <span class="font-mono">({componentCounts.all})</span>
 					</Tabs.Trigger>
 					<Tabs.Trigger value="lwc">
-						LWC ({componentCounts.lwc})
+						LWC <span class="font-mono">({componentCounts.lwc})</span>
 					</Tabs.Trigger>
 					<Tabs.Trigger value="apex">
-						Apex ({componentCounts.apex})
+						Apex <span class="font-mono">({componentCounts.apex})</span>
 					</Tabs.Trigger>
 					<Tabs.Trigger value="object">
-						Objects ({componentCounts.object})
+						Objects <span class="font-mono">({componentCounts.object})</span>
 					</Tabs.Trigger>
 					<Tabs.Trigger value="field">
-						Fields ({componentCounts.field})
+						Fields <span class="font-mono">({componentCounts.field})</span>
 					</Tabs.Trigger>
 					<Tabs.Trigger value="trigger">
-						Triggers ({componentCounts.trigger})
+						Triggers <span class="font-mono">({componentCounts.trigger})</span>
 					</Tabs.Trigger>
 				</Tabs.List>
 
@@ -480,7 +480,7 @@
 									<Checkbox checked={isSelected(component.id)} />
 									<div class="flex-1">
 										<div class="flex items-center gap-2 flex-wrap">
-											<Badge variant="outline" class="text-xs">
+											<Badge variant="outline" class="text-xs font-mono">
 												{component.type.toUpperCase()}
 											</Badge>
 											{#if component.sourceOrgName}
@@ -494,12 +494,12 @@
 											{/if}
 											<p class="font-medium">{component.name}</p>
 										</div>
-										<p class="text-sm text-muted-foreground">{component.apiName}</p>
+										<p class="text-sm text-muted-foreground font-mono">{component.apiName}</p>
 										{#if component.description}
 											<p class="text-xs text-muted-foreground mt-1">{component.description}</p>
 										{/if}
 									</div>
-									<div class="text-sm text-muted-foreground">
+									<div class="text-sm text-muted-foreground font-mono">
 										{component.dependencies.length} dep{component.dependencies.length !== 1 ? 's' : ''}
 									</div>
 								</button>

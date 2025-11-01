@@ -156,16 +156,16 @@
 	<Tabs.Root bind:value={selectedTab} class="flex-1 flex flex-col min-h-0">
 		<Tabs.List class="grid w-full grid-cols-4 h-9">
 			<Tabs.Trigger value="all" class="text-xs">
-				All ({componentCounts.all})
+				All <span class="font-mono">({componentCounts.all})</span>
 			</Tabs.Trigger>
 			<Tabs.Trigger value="lwc" class="text-xs">
-				LWC ({componentCounts.lwc})
+				LWC <span class="font-mono">({componentCounts.lwc})</span>
 			</Tabs.Trigger>
 			<Tabs.Trigger value="apex" class="text-xs">
-				Apex ({componentCounts.apex})
+				Apex <span class="font-mono">({componentCounts.apex})</span>
 			</Tabs.Trigger>
 			<Tabs.Trigger value="object" class="text-xs">
-				Obj ({componentCounts.object})
+				Obj <span class="font-mono">({componentCounts.object})</span>
 			</Tabs.Trigger>
 		</Tabs.List>
 
@@ -188,17 +188,17 @@
 							<Checkbox checked={isSelected(component.id)} class="mt-0.5" />
 							<div class="flex-1 min-w-0">
 								<div class="flex items-center gap-2 flex-wrap">
-									<Badge variant="outline" class="text-xs">
+									<Badge variant="outline" class="text-xs font-mono">
 										{component.type.toUpperCase()}
 									</Badge>
 									<p class="font-medium text-sm truncate">{component.name}</p>
 								</div>
-								<p class="text-xs text-muted-foreground truncate">{component.apiName}</p>
+								<p class="text-xs text-muted-foreground truncate font-mono">{component.apiName}</p>
 								{#if component.description}
 									<p class="text-xs text-muted-foreground mt-1 line-clamp-2">{component.description}</p>
 								{/if}
 								<div class="flex items-center gap-2 mt-1">
-									<span class="text-xs text-muted-foreground">
+									<span class="text-xs text-muted-foreground font-mono">
 										{component.dependencies.length} dep{component.dependencies.length !== 1 ? 's' : ''}
 									</span>
 								</div>

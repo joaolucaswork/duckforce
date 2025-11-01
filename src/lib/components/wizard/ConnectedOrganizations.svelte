@@ -76,7 +76,7 @@
 								/>
 							</div>
 							<div class="flex-1 min-w-0">
-								<h4 class="font-medium text-sm truncate" title={org.org_name}>
+								<h4 class="font-medium text-sm truncate font-mono" title={org.org_name}>
 									{org.org_name}
 								</h4>
 								<p class="text-xs text-muted-foreground">
