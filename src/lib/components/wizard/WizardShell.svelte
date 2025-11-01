@@ -192,7 +192,7 @@
 			{/if}
 
 			<!-- Main Content -->
-			<main class="flex-1 overflow-auto flex items-center relative">
+			<main class="flex-1 flex items-center relative">
 				<!-- Dot Grid Background Pattern -->
 				<svg class="absolute inset-0 h-full w-full pointer-events-none" xmlns="http://www.w3.org/2000/svg">
 					<defs>
@@ -203,7 +203,7 @@
 					<rect width="100%" height="100%" fill="url(#wizard-dot-grid)" />
 				</svg>
 
-				<div class="max-w-4xl mx-auto px-8 py-8 w-full relative z-10">
+				<div class="{wizardStore.state.currentStep === 'select-components' ? 'w-full px-5' : 'max-w-4xl mx-auto px-8'} py-8 pb-24 w-full relative z-10">
 					<!-- Step Header: Exibe o número do passo, título e descrição de forma centralizada -->
 					<!-- <div class="mb-10 text-center"> -->
 						<!-- Indicador numérico do passo atual (círculo com número) -->
@@ -224,25 +224,20 @@
 					<div class="space-y-6">
 						{@render children()}
 					</div>
-
-					<!-- Navigation Footer -->
-					<div class="mt-12 flex items-center justify-between">
-						<Button
-							variant="outline"
-							onclick={handlePrevious}
-							disabled={!canGoPrevious}
-						>
-							Previous
-						</Button>
-						<Button
-							onclick={handleNext}
-							disabled={!canGoNext}
-						>
-							{isLastStep ? 'Finish' : 'Next'}
-						</Button>
-					</div>
 				</div>
 			</main>
+
+			<!-- Fixed Navigation Footer -->
+			<div class="fixed bottom-0 left-0 right-0 z-20 border-t bg-background">
+				<div class="w-full max-w-6xl mx-auto px-8 py-3 flex items-center justify-end">
+					<Button
+						onclick={handleNext}
+						disabled={!canGoNext}
+					>
+						{isLastStep ? 'Finish' : 'Next'}
+					</Button>
+				</div>
+			</div>
 		</div>
 	</Sidebar.Inset>
 

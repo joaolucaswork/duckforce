@@ -133,6 +133,43 @@
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
+
+  /* Custom scrollbar styling */
+  .scrollbar-custom {
+    scrollbar-width: thin;
+    scrollbar-color: oklch(0.708 0 0 / 0.3) transparent;
+  }
+
+  .scrollbar-custom::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .scrollbar-custom::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-custom::-webkit-scrollbar-thumb {
+    background-color: oklch(0.708 0 0 / 0.3);
+    border-radius: 4px;
+  }
+
+  .scrollbar-custom::-webkit-scrollbar-thumb:hover {
+    background-color: oklch(0.708 0 0 / 0.5);
+  }
+
+  /* Dark mode scrollbar */
+  .dark .scrollbar-custom {
+    scrollbar-color: oklch(0.556 0 0 / 0.3) transparent;
+  }
+
+  .dark .scrollbar-custom::-webkit-scrollbar-thumb {
+    background-color: oklch(0.556 0 0 / 0.3);
+  }
+
+  .dark .scrollbar-custom::-webkit-scrollbar-thumb:hover {
+    background-color: oklch(0.556 0 0 / 0.5);
+  }
 }
 
 /* Premium sidebar animation - smooth ease similar to ChatGPT */

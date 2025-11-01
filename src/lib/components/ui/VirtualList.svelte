@@ -39,7 +39,7 @@
 
 <div
 	onscroll={handleScroll}
-	class="overflow-y-auto"
+	class="overflow-y-auto scrollbar-custom"
 	style="height: {height}px;"
 >
 	<div style="height: {totalHeight}px; position: relative;">

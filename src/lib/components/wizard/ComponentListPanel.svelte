@@ -3,9 +3,9 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Input } from '$lib/components/ui/input';
-	import * as Tabs from '$lib/components/ui/tabs';
+	import * as Select from '$lib/components/ui/select';
 	import * as Tooltip from '$lib/components/ui/tooltip';
-	import { Search, Info } from '@lucide/svelte';
+	import { Search, Info, RefreshCw } from '@lucide/svelte';
 	import type { ComponentType, SalesforceComponent } from '$lib/types/salesforce';
 	import type { CachedOrganization } from '$lib/types/wizard';
 	import VirtualList from '$lib/components/ui/VirtualList.svelte';
@@ -21,18 +21,22 @@
 		onSelectAll: (orgId: string) => void;
 		onDeselectAll: (orgId: string) => void;
 		isSelected: (componentId: string) => boolean;
+		onRefresh?: () => void | Promise<void>;
+		isRefreshing?: boolean;
 	}
 
 	let {
 		components,
 		selectedIds,
-		orgId,
+		// orgId, // Not used anymore - kept in Props for compatibility
 		organization,
 		role,
 		onToggleComponent,
-		onSelectAll,
-		onDeselectAll,
-		isSelected
+		// onSelectAll, // Not used anymore - using onToggleComponent instead
+		// onDeselectAll, // Not used anymore - using onToggleComponent instead
+		isSelected,
+		onRefresh,
+		isRefreshing = false
 	}: Props = $props();
 
 	let searchQuery = $state('');
@@ -123,12 +127,56 @@
 		};
 	});
 
-	const selectedCount = $derived(() => {
-		return components.filter(c => selectedIds.has(c.id)).length;
+	// Get components for the current tab (filtered by type)
+	const currentTabComponents = $derived(() => {
+		if (selectedTab === 'all') {
+			return components;
+		}
+		return components.filter(c => c.type === selectedTab);
 	});
 
-	// Track if any components are selected for this org
-	const hasSelection = $derived(selectedCount() > 0);
+	// Count selected components in current tab
+	const currentTabSelectedCount = $derived(() => {
+		return currentTabComponents().filter(c => selectedIds.has(c.id)).length;
+	});
+
+	// Count selected components in current filter (respects both type filter and search)
+	const currentFilterSelectedCount = $derived(() => {
+		return filteredComponents.filter(c => selectedIds.has(c.id)).length;
+	});
+
+	// Calculate checkbox state for select all (based on current tab)
+	const allSelected = $derived(() => {
+		const tabComponents = currentTabComponents();
+		return tabComponents.length > 0 && currentTabSelectedCount() === tabComponents.length;
+	});
+
+	const someSelected = $derived(() => {
+		const count = currentTabSelectedCount();
+		const total = currentTabComponents().length;
+		return count > 0 && count < total;
+	});
+
+	// Handle select all checkbox toggle (only for current tab)
+	function handleSelectAllToggle() {
+		const tabComponents = currentTabComponents();
+
+		if (allSelected()) {
+			// Deselect all components in current tab
+			tabComponents.forEach(component => {
+				if (selectedIds.has(component.id)) {
+					onToggleComponent(component.id);
+				}
+			});
+		} else {
+			// Select all components in current tab
+			tabComponents.forEach(component => {
+				if (!selectedIds.has(component.id)) {
+					onToggleComponent(component.id);
+				}
+			});
+		}
+	}
 </script>
 
 <div class="space-y-4 h-full flex flex-col">
@@ -137,17 +185,53 @@
 
 	<!-- Panel Header -->
 	<div class="space-y-3">
-		<!-- Search -->
-		<div class="relative">
-			<Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-			<Input
-				bind:value={searchQuery}
-				placeholder="Search components..."
-				class="pl-9 h-9"
-			/>
+		<!-- Filter and Search Row -->
+		<div class="flex items-center gap-2">
+			<!-- Component Type Filter -->
+			<Select.Root
+				type="single"
+				bind:value={selectedTab}
+			>
+				<Select.Trigger class="w-[180px] h-9">
+					{#if selectedTab === 'all'}
+						All
+					{:else if selectedTab === 'lwc'}
+						LWC
+					{:else if selectedTab === 'apex'}
+						Apex
+					{:else if selectedTab === 'object'}
+						Object
+					{/if}
+				</Select.Trigger>
+				<Select.Content>
+					<Select.Item value="all">
+						All
+					</Select.Item>
+					<Select.Item value="lwc">
+						LWC
+					</Select.Item>
+					<Select.Item value="apex">
+						Apex
+					</Select.Item>
+					<Select.Item value="object">
+						Object
+					</Select.Item>
+				</Select.Content>
+			</Select.Root>
+
+			<!-- Search -->
+			<div class="relative flex-1">
+				<Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+				<Input
+					bind:value={searchQuery}
+					placeholder="Search components..."
+					class="pl-9 h-9"
+				/>
+			</div>
 		</div>
 
 		<!-- Selection Summary and Actions (only shown when components are selected) -->
+		<!-- COMMENTED OUT: Replaced with checkbox-based select all control
 		{#if hasSelection}
 			<div class="flex items-center justify-between p-2 bg-muted rounded-lg">
 				<div class="flex items-center gap-3">
@@ -175,70 +259,88 @@
 				</div>
 			</div>
 		{/if}
+		-->
 	</div>
 
-	<!-- Component Tabs -->
-	<Tabs.Root bind:value={selectedTab} class="flex-1 flex flex-col min-h-0">
-		<Tabs.List class="grid w-full grid-cols-4 h-9">
-			<Tabs.Trigger value="all" class="text-xs">
-				All <span class="font-mono">({componentCounts.all})</span>
-			</Tabs.Trigger>
-			<Tabs.Trigger value="lwc" class="text-xs">
-				LWC <span class="font-mono">({componentCounts.lwc})</span>
-			</Tabs.Trigger>
-			<Tabs.Trigger value="apex" class="text-xs">
-				Apex <span class="font-mono">({componentCounts.apex})</span>
-			</Tabs.Trigger>
-			<Tabs.Trigger value="object" class="text-xs">
-				Obj <span class="font-mono">({componentCounts.object})</span>
-			</Tabs.Trigger>
-		</Tabs.List>
+	<!-- Select All Checkbox and Component List -->
+	<div class="flex-1 flex flex-col min-h-0">
+		<!-- Select All Checkbox and Selection Count -->
+		<div class="flex items-start justify-between mb-2">
+			<button
+				onclick={handleSelectAllToggle}
+				class="flex items-start gap-2 p-2.5 cursor-pointer"
+				type="button"
+				aria-label="Select all components"
+			>
+				<Checkbox
+					checked={allSelected()}
+					indeterminate={someSelected()}
+					class="mt-0.5"
+				/>
+				<span class="text-xs text-muted-foreground mt-0.5">
+					{currentFilterSelectedCount()} of {filteredComponents.length} selected
+				</span>
+			</button>
 
-		<Tabs.Content value={selectedTab} class="mt-3 flex-1 min-h-0">
-			{#if filteredComponents.length === 0}
-				<div class="text-center py-8 text-muted-foreground">
-					<p class="text-sm">No components found</p>
-				</div>
-			{:else}
-				<VirtualList
-					items={filteredComponents}
-					itemHeight={90}
-					height={500}
+			{#if onRefresh}
+				<Button
+					variant="ghost"
+					size="sm"
+					onclick={onRefresh}
+					disabled={isRefreshing}
+					class="h-8"
 				>
-					{#snippet children(component: SalesforceComponent)}
-						<button
-							onclick={() => onToggleComponent(component.id)}
-							class="group w-full flex items-start gap-2 p-2.5 mb-2 rounded-lg border hover:bg-accent transition-colors text-left {isSelected(component.id) ? 'bg-accent' : ''}"
-						>
-							<Checkbox checked={isSelected(component.id)} class="mt-0.5" />
+					<RefreshCw class="h-4 w-4 {isRefreshing ? 'animate-spin' : ''}" />
+				</Button>
+			{/if}
+		</div>
+
+		<!-- Component List -->
+		{#if filteredComponents.length === 0}
+			<div class="text-center py-8 text-muted-foreground">
+				<p class="text-sm">No components found</p>
+			</div>
+		{:else}
+			<VirtualList
+				items={filteredComponents}
+				itemHeight={90}
+				height={500}
+			>
+				{#snippet children(component: SalesforceComponent)}
+					<button
+						onclick={() => onToggleComponent(component.id)}
+						class="group w-full flex items-start gap-2 p-2.5 mb-2 rounded-lg border hover:bg-accent transition-colors text-left {isSelected(component.id) ? 'bg-accent' : ''}"
+					>
+						<Checkbox checked={isSelected(component.id)} class="mt-0.5" />
+						<div class="flex-1 min-w-0 flex items-start justify-between gap-3">
 							<div class="flex-1 min-w-0">
-								<div class="flex items-center gap-2 flex-wrap">
-									<Badge variant="outline" class="text-xs font-mono">
-										{component.type.toUpperCase()}
-									</Badge>
-									<p class="font-medium text-sm truncate">{component.name}</p>
-									<Tooltip.Root>
-										<Tooltip.Trigger>
-											{#snippet child({ props })}
-												<button {...props} class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100" type="button">
-													<Info class="h-3.5 w-3.5" />
-												</button>
-											{/snippet}
-										</Tooltip.Trigger>
-										<Tooltip.Content side="top">
-											<span class="font-mono">{component.apiName}</span>
-										</Tooltip.Content>
-									</Tooltip.Root>
-								</div>
+								<p class="font-medium text-sm truncate">{component.name}</p>
 								{#if component.description}
 									<p class="text-xs text-muted-foreground mt-1 line-clamp-2">{component.description}</p>
 								{/if}
 							</div>
-						</button>
-					{/snippet}
-				</VirtualList>
-			{/if}
-		</Tabs.Content>
-	</Tabs.Root>
+							<div class="flex items-center gap-1.5 flex-shrink-0">
+								<Badge variant="outline" class="text-xs font-mono">
+									{component.type.toUpperCase()}
+								</Badge>
+								<Tooltip.Root>
+									<Tooltip.Trigger>
+										{#snippet child({ props })}
+											<button {...props} class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100" type="button">
+												<Info class="h-3.5 w-3.5" />
+											</button>
+										{/snippet}
+									</Tooltip.Trigger>
+									<Tooltip.Content side="top">
+										<span class="font-mono">{component.apiName}</span>
+									</Tooltip.Content>
+								</Tooltip.Root>
+							</div>
+						</div>
+					</button>
+				{/snippet}
+			</VirtualList>
+		{/if}
+	</div>
 </div>
 

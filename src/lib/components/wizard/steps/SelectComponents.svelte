@@ -6,7 +6,7 @@
 	import * as Tabs from '$lib/components/ui/tabs';
 	import * as Alert from '$lib/components/ui/alert';
 	import * as Tooltip from '$lib/components/ui/tooltip';
-	import { LoaderCircle, TriangleAlert, RefreshCw, LayoutGrid, Columns2, Info } from '@lucide/svelte';
+	import { LoaderCircle, TriangleAlert, RefreshCw, LayoutGrid, Columns2, Info, X } from '@lucide/svelte';
 	import type { ComponentType, SalesforceComponent } from '$lib/types/salesforce';
 	import { onMount } from 'svelte';
 	import ComponentListPanel from '$lib/components/wizard/ComponentListPanel.svelte';
@@ -18,6 +18,9 @@
 	let lastLoadedSourceOrgId = $state<string | null>(null);
 	let lastLoadedTargetOrgId = $state<string | null>(null);
 	let viewMode = $state<'unified' | 'side-by-side'>('side-by-side');
+	let showBanner = $state(true);
+	let sourceRefreshing = $state(false);
+	let targetRefreshing = $state(false);
 
 	const isLoading = $derived(wizardStore.state.componentSelection.isLoading);
 	const availableComponents = $derived(wizardStore.state.componentSelection.availableComponents);
@@ -253,6 +256,86 @@
 		}
 	}
 
+	async function handleRefreshSourceComponents() {
+		const selectedOrgId = wizardStore.state.selectedSourceOrgId;
+
+		if (!selectedOrgId) {
+			console.error('[RefreshComponents] No source org selected');
+			return;
+		}
+
+		const sourceOrg = wizardStore.state.cachedOrgs.find(org => org.id === selectedOrgId);
+
+		if (!sourceOrg) {
+			console.error('[RefreshComponents] Source org not found in cached orgs');
+			return;
+		}
+
+		try {
+			sourceRefreshing = true;
+			console.log('[RefreshComponents] Refreshing source components for org:', sourceOrg.org_id);
+
+			const response = await fetch(`/api/orgs/${sourceOrg.org_id}/sync?refreshComponents=true`, {
+				method: 'POST'
+			});
+
+			if (!response.ok) {
+				throw new Error('Failed to refresh components');
+			}
+
+			const data = await response.json();
+			console.log('[RefreshComponents] Source components refreshed:', data);
+
+			// Reload components
+			await fetchComponents();
+		} catch (err) {
+			console.error('[RefreshComponents] Error:', err);
+			errorMessage = 'Failed to refresh source components';
+		} finally {
+			sourceRefreshing = false;
+		}
+	}
+
+	async function handleRefreshTargetComponents() {
+		const selectedOrgId = wizardStore.state.selectedTargetOrgId;
+
+		if (!selectedOrgId) {
+			console.error('[RefreshComponents] No target org selected');
+			return;
+		}
+
+		const targetOrg = wizardStore.state.cachedOrgs.find(org => org.id === selectedOrgId);
+
+		if (!targetOrg) {
+			console.error('[RefreshComponents] Target org not found in cached orgs');
+			return;
+		}
+
+		try {
+			targetRefreshing = true;
+			console.log('[RefreshComponents] Refreshing target components for org:', targetOrg.org_id);
+
+			const response = await fetch(`/api/orgs/${targetOrg.org_id}/sync?refreshComponents=true`, {
+				method: 'POST'
+			});
+
+			if (!response.ok) {
+				throw new Error('Failed to refresh components');
+			}
+
+			const data = await response.json();
+			console.log('[RefreshComponents] Target components refreshed:', data);
+
+			// Reload components
+			await fetchComponents();
+		} catch (err) {
+			console.error('[RefreshComponents] Error:', err);
+			errorMessage = 'Failed to refresh target components';
+		} finally {
+			targetRefreshing = false;
+		}
+	}
+
 	onMount(async () => {
 		console.log('[SelectComponents] onMount - Starting');
 		console.log('[SelectComponents] selectedSourceOrgId:', selectedSourceOrgId);
@@ -321,16 +404,25 @@
 
 <div class="space-y-6">
 	<!-- Info Alert -->
-	<Alert.Root>
-		<Alert.Title>Select Components to Migrate</Alert.Title>
-		<Alert.Description class="text-sm">
-			{#if viewMode === 'side-by-side'}
-				Select components from either organization to include in the migration. Dependencies will be automatically discovered in the next step.
-			{:else}
-				Choose the components you want to migrate from your source org. Dependencies will be automatically discovered in the next step.
-			{/if}
-		</Alert.Description>
-	</Alert.Root>
+	{#if showBanner}
+		<Alert.Root class="relative">
+			<Alert.Title>Select Components to Migrate</Alert.Title>
+			<Alert.Description class="text-sm pr-8">
+				{#if viewMode === 'side-by-side'}
+					Select components from either organization to include in the migration. Dependencies will be automatically discovered in the next step.
+				{:else}
+					Choose the components you want to migrate from your source org. Dependencies will be automatically discovered in the next step.
+				{/if}
+			</Alert.Description>
+			<button
+				onclick={() => showBanner = false}
+				class="absolute top-3 right-3 text-muted-foreground hover:text-foreground transition-colors"
+				aria-label="Close banner"
+			>
+				<X class="h-4 w-4" />
+			</button>
+		</Alert.Root>
+	{/if}
 
 
 
@@ -396,6 +488,8 @@
 						onSelectAll={handleSelectAllFromOrg}
 						onDeselectAll={handleDeselectAllFromOrg}
 						isSelected={isSelected}
+						onRefresh={handleRefreshSourceComponents}
+						isRefreshing={sourceRefreshing}
 					/>
 				</div>
 
@@ -411,6 +505,8 @@
 						onSelectAll={handleSelectAllFromOrg}
 						onDeselectAll={handleDeselectAllFromOrg}
 						isSelected={isSelected}
+						onRefresh={handleRefreshTargetComponents}
+						isRefreshing={targetRefreshing}
 					/>
 				</div>
 			</div>
