@@ -5,10 +5,10 @@
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import * as Tabs from '$lib/components/ui/tabs';
 	import * as Alert from '$lib/components/ui/alert';
-	import { LoaderCircle, Info, TriangleAlert, RefreshCw, LayoutGrid, Columns2 } from '@lucide/svelte';
+	import * as Tooltip from '$lib/components/ui/tooltip';
+	import { LoaderCircle, TriangleAlert, RefreshCw, LayoutGrid, Columns2, Info, X } from '@lucide/svelte';
 	import type { ComponentType, SalesforceComponent } from '$lib/types/salesforce';
 	import { onMount } from 'svelte';
-	import ConnectedOrganizations from '$lib/components/wizard/ConnectedOrganizations.svelte';
 	import ComponentListPanel from '$lib/components/wizard/ComponentListPanel.svelte';
 	import VirtualList from '$lib/components/ui/VirtualList.svelte';
 
@@ -17,7 +17,10 @@
 	let errorMessage = $state<string | null>(null);
 	let lastLoadedSourceOrgId = $state<string | null>(null);
 	let lastLoadedTargetOrgId = $state<string | null>(null);
-	let viewMode = $state<'unified' | 'side-by-side'>('unified');
+	let viewMode = $state<'unified' | 'side-by-side'>('side-by-side');
+	let showBanner = $state(true);
+	let sourceRefreshing = $state(false);
+	let targetRefreshing = $state(false);
 
 	const isLoading = $derived(wizardStore.state.componentSelection.isLoading);
 	const availableComponents = $derived(wizardStore.state.componentSelection.availableComponents);
@@ -127,8 +130,6 @@
 			result: componentCounts
 		};
 	});
-
-	const selectedCount = $derived(selectedIds.size);
 
 	/**
 	 * Fetch components from both source and target organizations
@@ -255,6 +256,86 @@
 		}
 	}
 
+	async function handleRefreshSourceComponents() {
+		const selectedOrgId = wizardStore.state.selectedSourceOrgId;
+
+		if (!selectedOrgId) {
+			console.error('[RefreshComponents] No source org selected');
+			return;
+		}
+
+		const sourceOrg = wizardStore.state.cachedOrgs.find(org => org.id === selectedOrgId);
+
+		if (!sourceOrg) {
+			console.error('[RefreshComponents] Source org not found in cached orgs');
+			return;
+		}
+
+		try {
+			sourceRefreshing = true;
+			console.log('[RefreshComponents] Refreshing source components for org:', sourceOrg.org_id);
+
+			const response = await fetch(`/api/orgs/${sourceOrg.org_id}/sync?refreshComponents=true`, {
+				method: 'POST'
+			});
+
+			if (!response.ok) {
+				throw new Error('Failed to refresh components');
+			}
+
+			const data = await response.json();
+			console.log('[RefreshComponents] Source components refreshed:', data);
+
+			// Reload components
+			await fetchComponents();
+		} catch (err) {
+			console.error('[RefreshComponents] Error:', err);
+			errorMessage = 'Failed to refresh source components';
+		} finally {
+			sourceRefreshing = false;
+		}
+	}
+
+	async function handleRefreshTargetComponents() {
+		const selectedOrgId = wizardStore.state.selectedTargetOrgId;
+
+		if (!selectedOrgId) {
+			console.error('[RefreshComponents] No target org selected');
+			return;
+		}
+
+		const targetOrg = wizardStore.state.cachedOrgs.find(org => org.id === selectedOrgId);
+
+		if (!targetOrg) {
+			console.error('[RefreshComponents] Target org not found in cached orgs');
+			return;
+		}
+
+		try {
+			targetRefreshing = true;
+			console.log('[RefreshComponents] Refreshing target components for org:', targetOrg.org_id);
+
+			const response = await fetch(`/api/orgs/${targetOrg.org_id}/sync?refreshComponents=true`, {
+				method: 'POST'
+			});
+
+			if (!response.ok) {
+				throw new Error('Failed to refresh components');
+			}
+
+			const data = await response.json();
+			console.log('[RefreshComponents] Target components refreshed:', data);
+
+			// Reload components
+			await fetchComponents();
+		} catch (err) {
+			console.error('[RefreshComponents] Error:', err);
+			errorMessage = 'Failed to refresh target components';
+		} finally {
+			targetRefreshing = false;
+		}
+	}
+
 	onMount(async () => {
 		console.log('[SelectComponents] onMount - Starting');
 		console.log('[SelectComponents] selectedSourceOrgId:', selectedSourceOrgId);
@@ -308,12 +389,12 @@
 		wizardStore.toggleComponentSelection(componentId);
 	}
 
-	function handleSelectAll() {
-		wizardStore.selectAllComponents();
+	function handleSelectAllFromOrg(orgId: string) {
+		wizardStore.selectAllComponentsFromOrg(orgId);
 	}
 
-	function handleDeselectAll() {
-		wizardStore.deselectAllComponents();
+	function handleDeselectAllFromOrg(orgId: string) {
+		wizardStore.deselectAllComponentsFromOrg(orgId);
 	}
 
 	function isSelected(componentId: string): boolean {
@@ -322,28 +403,28 @@
 </script>
 
 <div class="space-y-6">
-	<!-- Connected Organizations Display -->
-	{#if cachedOrgs.length > 0}
-		<ConnectedOrganizations
-			organizations={cachedOrgs}
-			sourceOrgId={selectedSourceOrgId}
-			targetOrgId={selectedTargetOrgId}
-		/>
+	<!-- Info Alert -->
+	{#if showBanner}
+		<Alert.Root class="relative">
+			<Alert.Title>Select Components to Migrate</Alert.Title>
+			<Alert.Description class="text-sm pr-8">
+				{#if viewMode === 'side-by-side'}
+					Select components from either organization to include in the migration. Dependencies will be automatically discovered in the next step.
+				{:else}
+					Choose the components you want to migrate from your source org. Dependencies will be automatically discovered in the next step.
+				{/if}
+			</Alert.Description>
+			<button
+				onclick={() => showBanner = false}
+				class="absolute top-3 right-3 text-muted-foreground hover:text-foreground transition-colors"
+				aria-label="Close banner"
+			>
+				<X class="h-4 w-4" />
+			</button>
+		</Alert.Root>
 	{/if}
 
-	<!-- Info Alert -->
-	<Alert.Root>
-		<Info class="h-4 w-4" />
-		<Alert.Title>Select Components to Migrate</Alert.Title>
-		<Alert.Description>
-			{#if viewMode === 'side-by-side'}
-				Viewing components from both organizations side-by-side. Select components from either organization to include in the migration.
-			{:else}
-				Choose the components you want to migrate from your source org. Dependencies will be
-				automatically discovered in the next step.
-			{/if}
-		</Alert.Description>
-	</Alert.Root>
+
 
 	{#if errorMessage}
 		<!-- Error Alert -->
@@ -369,48 +450,30 @@
 			</div>
 		</div>
 	{:else if !errorMessage}
-		<!-- View Mode Toggle and Actions -->
-		<div class="flex items-center justify-between gap-4">
+		<!-- View Mode Toggle -->
+		{#if sourceComponents().length > 0 && targetComponents().length > 0}
 			<div class="flex items-center gap-2">
-				{#if sourceComponents().length > 0 && targetComponents().length > 0}
-					<Button
-						variant={viewMode === 'unified' ? 'default' : 'outline'}
-						size="sm"
-						onclick={() => viewMode = 'unified'}
-					>
-						<LayoutGrid class="h-4 w-4 mr-2" />
-						Unified
-					</Button>
-					<Button
-						variant={viewMode === 'side-by-side' ? 'default' : 'outline'}
-						size="sm"
-						onclick={() => viewMode = 'side-by-side'}
-					>
-						<Columns2 class="h-4 w-4 mr-2" />
-						Side-by-Side
-					</Button>
-				{/if}
-			</div>
-
-			<div class="flex gap-2">
-				<Button variant="outline" size="sm" onclick={handleSelectAll}>
-					Select All
+				<Button
+					variant={viewMode === 'unified' ? 'default' : 'outline'}
+					size="sm"
+					onclick={() => viewMode = 'unified'}
+				>
+					<LayoutGrid class="h-4 w-4 mr-2" />
+					Unified
 				</Button>
-				<Button variant="outline" size="sm" onclick={handleDeselectAll}>
-					Deselect All
+				<Button
+					variant={viewMode === 'side-by-side' ? 'default' : 'outline'}
+					size="sm"
+					onclick={() => viewMode = 'side-by-side'}
+				>
+					<Columns2 class="h-4 w-4 mr-2" />
+					Side-by-Side
 				</Button>
 			</div>
-		</div>
-
-		<!-- Selection Summary -->
-		<div class="flex items-center justify-between p-3 bg-muted rounded-lg">
-			<p class="text-sm font-medium">
-				{selectedCount} component{selectedCount !== 1 ? 's' : ''} selected
-			</p>
-		</div>
+		{/if}
 
 		<!-- Component View -->
-		{#if viewMode === 'side-by-side' && sourceComponents().length > 0 && targetComponents().length > 0}
+		{#if viewMode === 'side-by-side' && sourceComponents().length > 0 && targetComponents().length > 0 && sourceOrg() && targetOrg()}
 			<!-- Side-by-Side View -->
 			<div class="grid grid-cols-2 gap-4 h-[600px]">
 				<!-- Source Org Panel -->
@@ -418,10 +481,15 @@
 					<ComponentListPanel
 						components={sourceComponents()}
 						selectedIds={selectedIds}
-						orgName={sourceOrg()?.org_name || 'Source Org'}
-						orgColor={sourceOrg()?.color}
+						orgId={selectedSourceOrgId || ''}
+						organization={sourceOrg()!}
+						role="source"
 						onToggleComponent={handleToggleComponent}
+						onSelectAll={handleSelectAllFromOrg}
+						onDeselectAll={handleDeselectAllFromOrg}
 						isSelected={isSelected}
+						onRefresh={handleRefreshSourceComponents}
+						isRefreshing={sourceRefreshing}
 					/>
 				</div>
 
@@ -430,10 +498,15 @@
 					<ComponentListPanel
 						components={targetComponents()}
 						selectedIds={selectedIds}
-						orgName={targetOrg()?.org_name || 'Target Org'}
-						orgColor={targetOrg()?.color}
+						orgId={selectedTargetOrgId || ''}
+						organization={targetOrg()!}
+						role="target"
 						onToggleComponent={handleToggleComponent}
+						onSelectAll={handleSelectAllFromOrg}
+						onDeselectAll={handleDeselectAllFromOrg}
 						isSelected={isSelected}
+						onRefresh={handleRefreshTargetComponents}
+						isRefreshing={targetRefreshing}
 					/>
 				</div>
 			</div>
@@ -442,22 +515,22 @@
 			<Tabs.Root bind:value={selectedTab}>
 				<Tabs.List class="grid w-full grid-cols-6">
 					<Tabs.Trigger value="all">
-						All ({componentCounts.all})
+						All <span class="font-mono">({componentCounts.all})</span>
 					</Tabs.Trigger>
 					<Tabs.Trigger value="lwc">
-						LWC ({componentCounts.lwc})
+						LWC <span class="font-mono">({componentCounts.lwc})</span>
 					</Tabs.Trigger>
 					<Tabs.Trigger value="apex">
-						Apex ({componentCounts.apex})
+						Apex <span class="font-mono">({componentCounts.apex})</span>
 					</Tabs.Trigger>
 					<Tabs.Trigger value="object">
-						Objects ({componentCounts.object})
+						Objects <span class="font-mono">({componentCounts.object})</span>
 					</Tabs.Trigger>
 					<Tabs.Trigger value="field">
-						Fields ({componentCounts.field})
+						Fields <span class="font-mono">({componentCounts.field})</span>
 					</Tabs.Trigger>
 					<Tabs.Trigger value="trigger">
-						Triggers ({componentCounts.trigger})
+						Triggers <span class="font-mono">({componentCounts.trigger})</span>
 					</Tabs.Trigger>
 				</Tabs.List>
 
@@ -475,12 +548,12 @@
 							{#snippet children(component: SalesforceComponent)}
 								<button
 									onclick={() => handleToggleComponent(component.id)}
-									class="w-full flex items-center gap-3 p-3 mb-2 rounded-lg border hover:bg-accent transition-colors text-left"
+									class="group w-full flex items-center gap-3 p-3 mb-2 rounded-lg border hover:bg-accent transition-colors text-left {isSelected(component.id) ? 'bg-accent' : ''}"
 								>
 									<Checkbox checked={isSelected(component.id)} />
 									<div class="flex-1">
 										<div class="flex items-center gap-2 flex-wrap">
-											<Badge variant="outline" class="text-xs">
+											<Badge variant="outline" class="text-xs font-mono">
 												{component.type.toUpperCase()}
 											</Badge>
 											{#if component.sourceOrgName}
@@ -493,14 +566,22 @@
 												</Badge>
 											{/if}
 											<p class="font-medium">{component.name}</p>
+											<Tooltip.Root>
+												<Tooltip.Trigger>
+													{#snippet child({ props })}
+														<button {...props} class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100" type="button">
+															<Info class="h-3.5 w-3.5" />
+														</button>
+													{/snippet}
+												</Tooltip.Trigger>
+												<Tooltip.Content side="top">
+													<span class="font-mono">{component.apiName}</span>
+												</Tooltip.Content>
+											</Tooltip.Root>
 										</div>
-										<p class="text-sm text-muted-foreground">{component.apiName}</p>
 										{#if component.description}
 											<p class="text-xs text-muted-foreground mt-1">{component.description}</p>
 										{/if}
-									</div>
-									<div class="text-sm text-muted-foreground">
-										{component.dependencies.length} dep{component.dependencies.length !== 1 ? 's' : ''}
 									</div>
 								</button>
 							{/snippet}

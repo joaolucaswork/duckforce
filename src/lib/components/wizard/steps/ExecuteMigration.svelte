@@ -232,7 +232,7 @@
 				{#if failedComponents.length > 0}
 					<div class="space-y-2">
 						<p class="text-sm font-medium">Failed Components</p>
-						<div class="space-y-1 max-h-[150px] overflow-y-auto">
+						<div class="space-y-1 max-h-[150px] overflow-y-auto scrollbar-custom">
 							{#each failedComponents as failed}
 								{@const component = allComponentsToMigrate().find(c => c.id === failed.id)}
 								<div class="p-2 rounded border border-red-200 bg-red-50 text-sm">

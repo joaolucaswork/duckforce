@@ -143,54 +143,56 @@
 	<!-- Main Content Area -->
 	<Sidebar.Inset>
 		<div class="flex flex-col min-h-screen">
-			<!-- Top Header -->
-			<header class="border-b bg-background sticky top-0 z-10">
-				<div class="px-8 py-6 flex items-center justify-between">
-					<div class="flex items-center gap-6">
-						<!-- Logo -->
-						<a href="/" class="flex-shrink-0">
-							<Logo size="md" showText={false} />
-						</a>
+			<!-- Top Header (hidden on select-components step) -->
+			{#if wizardStore.state.currentStep !== 'select-components'}
+				<header class="border-b bg-background sticky top-0 z-10">
+					<div class="px-8 py-6 flex items-center justify-between">
+						<div class="flex items-center gap-6">
+							<!-- Logo -->
+							<a href="/" class="flex-shrink-0">
+								<Logo size="md" showText={false} />
+							</a>
 
-						<!-- Step Title and Description -->
-						<div class="flex flex-col">
-							<div class="flex items-center gap-2">
-								<h1 class="text-2xl font-bold tracking-tight text-foreground">
-									{currentStepConfig.title}
-								</h1>
+							<!-- Step Title and Description -->
+							<div class="flex flex-col">
+								<div class="flex items-center gap-2">
+									<h1 class="text-2xl font-bold tracking-tight text-foreground">
+										{currentStepConfig.title}
+									</h1>
 
-								<!-- Info Tooltip -->
-								<Tooltip.Root>
-									<Tooltip.Trigger>
-										<div class="p-1 hover:bg-muted rounded-md transition-colors">
-											<Info class="h-4 w-4 text-muted-foreground" />
-										</div>
-									</Tooltip.Trigger>
-									<Tooltip.Content class="max-w-sm">
-										<div class="space-y-1">
-											<div class="font-semibold">Step {currentStepConfig.order} of {WIZARD_STEPS.length}</div>
-											<p class="opacity-70 leading-relaxed">{currentStepConfig.description}</p>
-										</div>
-									</Tooltip.Content>
-								</Tooltip.Root>
+									<!-- Info Tooltip -->
+									<Tooltip.Root>
+										<Tooltip.Trigger>
+											<div class="p-1 hover:bg-muted rounded-md transition-colors">
+												<Info class="h-4 w-4 text-muted-foreground" />
+											</div>
+										</Tooltip.Trigger>
+										<Tooltip.Content class="max-w-sm">
+											<div class="space-y-1">
+												<div class="font-semibold">Step {currentStepConfig.order} of {WIZARD_STEPS.length}</div>
+												<p class="opacity-70 leading-relaxed">{currentStepConfig.description}</p>
+											</div>
+										</Tooltip.Content>
+									</Tooltip.Root>
+								</div>
+
+								{#if currentStepConfig.description}
+									<p class="text-sm text-muted-foreground mt-0.5">
+										{currentStepConfig.description}
+									</p>
+								{/if}
 							</div>
-
-							{#if currentStepConfig.description}
-								<p class="text-sm text-muted-foreground mt-0.5">
-									{currentStepConfig.description}
-								</p>
-							{/if}
 						</div>
-					</div>
 
-					<Button variant="ghost" size="icon" href="/">
-						<X class="w-5 h-5" />
-					</Button>
-				</div>
-			</header>
+						<Button variant="ghost" size="icon" href="/">
+							<X class="w-5 h-5" />
+						</Button>
+					</div>
+				</header>
+			{/if}
 
 			<!-- Main Content -->
-			<main class="flex-1 overflow-auto flex items-center relative">
+			<main class="flex-1 flex items-center relative">
 				<!-- Dot Grid Background Pattern -->
 				<svg class="absolute inset-0 h-full w-full pointer-events-none" xmlns="http://www.w3.org/2000/svg">
 					<defs>
@@ -201,7 +203,7 @@
 					<rect width="100%" height="100%" fill="url(#wizard-dot-grid)" />
 				</svg>
 
-				<div class="max-w-4xl mx-auto px-8 py-8 w-full relative z-10">
+				<div class="{wizardStore.state.currentStep === 'select-components' ? 'w-full px-5' : 'max-w-4xl mx-auto px-8'} py-8 pb-24 w-full relative z-10">
 					<!-- Step Header: Exibe o número do passo, título e descrição de forma centralizada -->
 					<!-- <div class="mb-10 text-center"> -->
 						<!-- Indicador numérico do passo atual (círculo com número) -->
@@ -222,25 +224,20 @@
 					<div class="space-y-6">
 						{@render children()}
 					</div>
-
-					<!-- Navigation Footer -->
-					<div class="mt-12 flex items-center justify-between">
-						<Button
-							variant="outline"
-							onclick={handlePrevious}
-							disabled={!canGoPrevious}
-						>
-							Previous
-						</Button>
-						<Button
-							onclick={handleNext}
-							disabled={!canGoNext}
-						>
-							{isLastStep ? 'Finish' : 'Next'}
-						</Button>
-					</div>
 				</div>
 			</main>
+
+			<!-- Fixed Navigation Footer -->
+			<div class="fixed bottom-0 left-0 right-0 z-20 border-t bg-background">
+				<div class="w-full max-w-6xl mx-auto px-8 py-3 flex items-center justify-end">
+					<Button
+						onclick={handleNext}
+						disabled={!canGoNext}
+					>
+						{isLastStep ? 'Finish' : 'Next'}
+					</Button>
+				</div>
+			</div>
 		</div>
 	</Sidebar.Inset>
 

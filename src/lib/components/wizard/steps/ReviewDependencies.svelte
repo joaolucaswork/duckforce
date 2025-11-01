@@ -138,7 +138,7 @@
 					</div>
 				</Card.Header>
 				<Card.Content>
-					<div class="space-y-2 max-h-[200px] overflow-y-auto">
+					<div class="space-y-2 max-h-[200px] overflow-y-auto scrollbar-custom">
 						{#each selectedComponents() as component}
 							<div class="flex items-center justify-between p-2 rounded border">
 								<div class="flex items-center gap-2">
