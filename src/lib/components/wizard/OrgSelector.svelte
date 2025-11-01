@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { CachedOrganization } from '$lib/types/wizard';
 	import * as Select from '$lib/components/ui/select';
-	import * as Icons from 'lucide-svelte';
+	import * as Icons from '@lucide/svelte';
 	import { Badge } from '$lib/components/ui/badge';
 
 	interface Props {

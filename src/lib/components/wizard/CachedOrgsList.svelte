@@ -1,12 +1,14 @@
 <script lang="ts">
 	import type { CachedOrganization } from '$lib/types/wizard';
 	import OrgCard from './OrgCard.svelte';
+	import OrgCardSkeleton from './OrgCardSkeleton.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import * as Icons from 'lucide-svelte';
+	import * as Icons from '@lucide/svelte';
 
 	interface Props {
 		orgs: CachedOrganization[];
 		isLoading?: boolean;
+		hasLoaded?: boolean;
 		error?: string | null;
 		onRefresh?: (orgId: string) => void;
 		onDelete?: (orgId: string) => void;
@@ -15,13 +17,14 @@
 		refreshingOrgId?: string | null;
 	}
 
-	let { 
-		orgs, 
-		isLoading = false, 
-		error = null, 
-		onRefresh, 
-		onDelete, 
-		onActivate, 
+	let {
+		orgs,
+		isLoading = false,
+		hasLoaded = false,
+		error = null,
+		onRefresh,
+		onDelete,
+		onActivate,
 		onConnectNew,
 		refreshingOrgId = null
 	}: Props = $props();
@@ -55,10 +58,10 @@
 	{/if}
 
 	<!-- Loading state -->
-	{#if isLoading}
+	{#if isLoading || !hasLoaded}
 		<div class="grid gap-4 md:grid-cols-2">
 			{#each Array(2) as _}
-				<div class="h-48 animate-pulse rounded-lg bg-muted"></div>
+				<OrgCardSkeleton />
 			{/each}
 		</div>
 	{:else if orgs.length === 0}

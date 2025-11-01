@@ -1,7 +1,7 @@
 <script lang="ts">
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Progress } from '$lib/components/ui/progress';
-	import * as Icons from 'lucide-svelte';
+	import * as Icons from '@lucide/svelte';
 
 	interface Props {
 		open: boolean;

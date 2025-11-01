@@ -4,7 +4,7 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Card } from '$lib/components/ui/card';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-	import * as Icons from 'lucide-svelte';
+	import * as Icons from '@lucide/svelte';
 	import { formatDistanceToNow } from 'date-fns';
 
 	interface Props {
@@ -100,7 +100,7 @@
 					{/if}
 					{#if onRefresh}
 						<DropdownMenu.Item on:click={() => onRefresh?.(org.id)} disabled={isRefreshing}>
-							<Icons.RefreshCw class="mr-2 h-4 w-4" class:animate-spin={isRefreshing} />
+							<Icons.RefreshCw class={isRefreshing ? "mr-2 h-4 w-4 animate-spin" : "mr-2 h-4 w-4"} />
 							Refresh Data
 						</DropdownMenu.Item>
 					{/if}

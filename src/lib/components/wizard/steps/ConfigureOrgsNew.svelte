@@ -4,7 +4,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Alert from '$lib/components/ui/alert';
 	import * as Dialog from '$lib/components/ui/dialog';
-	import * as Icons from 'lucide-svelte';
+	import * as Icons from '@lucide/svelte';
 	import CachedOrgsList from '../CachedOrgsList.svelte';
 	import OrgSelector from '../OrgSelector.svelte';
 	import SyncProgress from '../SyncProgress.svelte';
@@ -138,6 +138,7 @@
 		<CachedOrgsList
 			orgs={wizardStore.state.cachedOrgs}
 			isLoading={isLoadingOrgs}
+			hasLoaded={wizardStore.state.hasLoadedOrgs}
 			error={wizardStore.state.orgsError}
 			onRefresh={handleRefresh}
 			onDelete={handleDeleteClick}

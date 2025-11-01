@@ -132,6 +132,7 @@ export interface WizardState {
 
 	// Loading states
 	isLoadingOrgs: boolean;
+	hasLoadedOrgs: boolean;
 	orgsError: string | null;
 
 	// DEPRECATED: Will be removed in Phase 4
@@ -154,6 +155,7 @@ export const initialWizardState: WizardState = {
 	selectedSourceOrgId: null,
 	selectedTargetOrgId: null,
 	isLoadingOrgs: false,
+	hasLoadedOrgs: false,
 	orgsError: null,
 
 	// DEPRECATED: Kept for backward compatibility

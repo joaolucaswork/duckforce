@@ -34,6 +34,7 @@
 	import type { Component } from 'svelte';
 	import duckforceArrow from '$lib/assets/duckforce-arrow.png';
 	import { onMount } from 'svelte';
+	import { Skeleton } from '$lib/components/ui/skeleton';
 
 	// Preset Color Palette - Professional, muted tones with better contrast
 	const COLOR_PALETTE = [
@@ -88,6 +89,9 @@
 	let targetIconScrollContainer: HTMLDivElement | undefined = $state();
 	let targetShowLeftArrow = $state(false);
 	let targetShowRightArrow = $state(true);
+
+	// Loading state for initial mount
+	let isInitialLoad = $state(true);
 
 	/**
 	 * Extract organization name from a Salesforce instance URL
@@ -390,7 +394,9 @@
 	onMount(async () => {
 		// IMPORTANT: Load cached orgs first for the new single-login model
 		console.log('[ConfigureOrgs] onMount - Loading cached orgs...');
+
 		try {
+			// Load the data
 			await wizardStore.loadCachedOrgs();
 			console.log('[ConfigureOrgs] Cached orgs loaded:', wizardStore.state.cachedOrgs.length);
 			console.log('[ConfigureOrgs] Cached orgs:', wizardStore.state.cachedOrgs);
@@ -520,6 +526,10 @@
 		} catch (err) {
 			console.error('Failed to check connection status:', err);
 		}
+
+		// All data loaded and state updated - now show content with smooth transition
+		await new Promise(resolve => setTimeout(resolve, 100));
+		isInitialLoad = false;
 	});
 </script>
 
@@ -547,7 +557,58 @@
 		</Alert.Root>
 	{/if}
 
-<div class="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] gap-6 items-center">
+{#if isInitialLoad}
+	<!-- Loading Skeletons -->
+	<div class="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] gap-6 items-center">
+		<!-- Source Skeleton -->
+		<div class="space-y-0">
+			<div class="bg-muted/50 px-6 py-3 rounded-t-lg border border-b-0">
+				<Skeleton class="h-6 w-48" />
+			</div>
+			<Card.Root class="shadow-none rounded-t-none border-t-0">
+				<Card.Content class="space-y-4 pt-6">
+					<Skeleton class="h-10 w-full" />
+					<Skeleton class="h-10 w-full" />
+					<Skeleton class="h-10 w-full" />
+					<div class="flex gap-2">
+						<Skeleton class="h-12 w-12 rounded-md" />
+						<Skeleton class="h-12 w-12 rounded-md" />
+						<Skeleton class="h-12 w-12 rounded-md" />
+						<Skeleton class="h-12 w-12 rounded-md" />
+					</div>
+					<Skeleton class="h-10 w-full" />
+				</Card.Content>
+			</Card.Root>
+		</div>
+
+		<!-- Arrow Skeleton -->
+		<div class="hidden lg:flex items-center justify-center">
+			<Skeleton class="h-12 w-12 rounded-full" />
+		</div>
+
+		<!-- Target Skeleton -->
+		<div class="space-y-0">
+			<div class="bg-muted/50 px-6 py-3 rounded-t-lg border border-b-0">
+				<Skeleton class="h-6 w-48" />
+			</div>
+			<Card.Root class="shadow-none rounded-t-none border-t-0">
+				<Card.Content class="space-y-4 pt-6">
+					<Skeleton class="h-10 w-full" />
+					<Skeleton class="h-10 w-full" />
+					<Skeleton class="h-10 w-full" />
+					<div class="flex gap-2">
+						<Skeleton class="h-12 w-12 rounded-md" />
+						<Skeleton class="h-12 w-12 rounded-md" />
+						<Skeleton class="h-12 w-12 rounded-md" />
+						<Skeleton class="h-12 w-12 rounded-md" />
+					</div>
+					<Skeleton class="h-10 w-full" />
+				</Card.Content>
+			</Card.Root>
+		</div>
+	</div>
+{:else}
+<div class="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] gap-6 items-center animate-in fade-in duration-300">
 	<!-- Source Organization -->
 	<div class="space-y-0">
 		<!-- Source Label Container -->
@@ -1219,4 +1280,5 @@
 	</Card.Root>
 	</div>
 </div>
-</div>
+{/if}
+</div> <!-- Close space-y-6 -->

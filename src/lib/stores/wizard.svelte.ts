@@ -87,6 +87,7 @@ class WizardStore {
 			console.error('Error loading cached orgs:', error);
 		} finally {
 			this.state.isLoadingOrgs = false;
+			this.state.hasLoadedOrgs = true;
 		}
 	}
 
