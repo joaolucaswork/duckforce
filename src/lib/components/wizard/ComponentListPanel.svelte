@@ -46,6 +46,7 @@
 	let searchQuery = $state('');
 	let selectedTab = $state<ComponentType | 'all'>('all');
 	let showSystemComponents = $state(false);
+	let hideExistingComponents = $state(true); // Hide components that exist in both orgs by default
 
 	// Format timestamp for display
 	function formatTimestamp(date: Date | null): string {
@@ -123,7 +124,7 @@
 
 	// Filter components based on search and tab with memoization
 	const filteredComponents = $derived.by(() => {
-		const cacheKey = `${selectedTab}-${searchQuery}-${showSystemComponents}-${components.length}`;
+		const cacheKey = `${selectedTab}-${searchQuery}-${showSystemComponents}-${hideExistingComponents}-${components.length}`;
 
 		// Check if we can use cached result
 		if (filteredComponentsCache && filteredComponentsCache.key === cacheKey) {
@@ -135,6 +136,11 @@
 		// Filter by custom/system components
 		if (!showSystemComponents) {
 			filtered = filtered.filter(c => isCustomComponent(c));
+		}
+
+		// Filter by existsInBoth
+		if (hideExistingComponents) {
+			filtered = filtered.filter(c => !c.existsInBoth);
 		}
 
 		// Filter by type
@@ -158,7 +164,7 @@
 
 	// Update cache after filteredComponents is computed
 	$effect(() => {
-		const cacheKey = `${selectedTab}-${searchQuery}-${showSystemComponents}-${components.length}`;
+		const cacheKey = `${selectedTab}-${searchQuery}-${showSystemComponents}-${hideExistingComponents}-${components.length}`;
 		filteredComponentsCache = {
 			key: cacheKey,
 			result: filteredComponents
@@ -172,17 +178,22 @@
 	} | null>(null);
 
 	const componentCounts = $derived.by(() => {
-		const cacheKey = `${components.length}-${showSystemComponents}`;
+		const cacheKey = `${components.length}-${showSystemComponents}-${hideExistingComponents}`;
 
 		// Return cached counts if components haven't changed
 		if (componentCountsCache && componentCountsCache.key === cacheKey) {
 			return componentCountsCache.result;
 		}
 
-		// Filter components based on custom/system setting
-		const componentsToCount = showSystemComponents
+		// Filter components based on custom/system setting and existsInBoth
+		let componentsToCount = showSystemComponents
 			? components
 			: components.filter(c => isCustomComponent(c));
+
+		// Filter by existsInBoth
+		if (hideExistingComponents) {
+			componentsToCount = componentsToCount.filter(c => !c.existsInBoth);
+		}
 
 		const counts: Record<ComponentType | 'all', number> = {
 			all: componentsToCount.length,
@@ -205,7 +216,7 @@
 	// Update counts cache after componentCounts is computed
 	$effect(() => {
 		componentCountsCache = {
-			key: `${components.length}-${showSystemComponents}`,
+			key: `${components.length}-${showSystemComponents}-${hideExistingComponents}`,
 			result: componentCounts
 		};
 	});
@@ -227,42 +238,47 @@
 		return filtered;
 	});
 
-	// Count selected components in current tab
+	// Get selectable components (exclude components that exist in both orgs)
+	const selectableTabComponents = $derived(() => {
+		return currentTabComponents().filter(c => !c.existsInBoth);
+	});
+
+	// Count selected components in current tab (only selectable ones)
 	const currentTabSelectedCount = $derived(() => {
-		return currentTabComponents().filter(c => selectedIds.has(c.id)).length;
+		return selectableTabComponents().filter(c => selectedIds.has(c.id)).length;
 	});
 
-	// Count selected components in current filter (respects both type filter and search)
+	// Count selected components in current filter (respects both type filter and search, only selectable)
 	const currentFilterSelectedCount = $derived(() => {
-		return filteredComponents.filter(c => selectedIds.has(c.id)).length;
+		return filteredComponents.filter(c => !c.existsInBoth && selectedIds.has(c.id)).length;
 	});
 
-	// Calculate checkbox state for select all (based on current tab)
+	// Calculate checkbox state for select all (based on current tab, only selectable components)
 	const allSelected = $derived(() => {
-		const tabComponents = currentTabComponents();
-		return tabComponents.length > 0 && currentTabSelectedCount() === tabComponents.length;
+		const selectable = selectableTabComponents();
+		return selectable.length > 0 && currentTabSelectedCount() === selectable.length;
 	});
 
 	const someSelected = $derived(() => {
 		const count = currentTabSelectedCount();
-		const total = currentTabComponents().length;
+		const total = selectableTabComponents().length;
 		return count > 0 && count < total;
 	});
 
-	// Handle select all checkbox toggle (only for current tab)
+	// Handle select all checkbox toggle (only for current tab, only selectable components)
 	function handleSelectAllToggle() {
-		const tabComponents = currentTabComponents();
+		const selectable = selectableTabComponents();
 
 		if (allSelected()) {
-			// Deselect all components in current tab
-			tabComponents.forEach(component => {
+			// Deselect all selectable components in current tab
+			selectable.forEach(component => {
 				if (selectedIds.has(component.id)) {
 					onToggleComponent(component.id);
 				}
 			});
 		} else {
-			// Select all components in current tab
-			tabComponents.forEach(component => {
+			// Select all selectable components in current tab
+			selectable.forEach(component => {
 				if (!selectedIds.has(component.id)) {
 					onToggleComponent(component.id);
 				}
@@ -370,7 +386,7 @@
 					class="mt-0.5"
 				/>
 				<span class="text-xs text-muted-foreground mt-0.5">
-					{currentFilterSelectedCount()} of {filteredComponents.length} selected
+					{currentFilterSelectedCount()} of {filteredComponents.filter(c => !c.existsInBoth).length} selected
 				</span>
 			</button>
 
@@ -407,6 +423,9 @@
 						<DropdownMenu.CheckboxItem bind:checked={showSystemComponents}>
 							Show System Components
 						</DropdownMenu.CheckboxItem>
+						<DropdownMenu.CheckboxItem bind:checked={hideExistingComponents}>
+							Hide Existing Components
+						</DropdownMenu.CheckboxItem>
 					</DropdownMenu.Content>
 				</DropdownMenu.Root>
 			</div>
@@ -442,10 +461,16 @@
 			>
 				{#snippet children(component: SalesforceComponent)}
 						<button
-							onclick={() => onToggleComponent(component.id)}
-							class="group w-full flex items-start gap-2 p-2.5 mb-2 rounded-lg border hover:bg-accent transition-colors text-left {isSelected(component.id) ? 'bg-accent' : ''}"
+							onclick={() => !component.existsInBoth && onToggleComponent(component.id)}
+							disabled={component.existsInBoth}
+							class="group w-full flex items-start gap-2 p-2.5 mb-2 rounded-lg border transition-colors text-left {component.existsInBoth ? 'opacity-50 cursor-not-allowed' : 'hover:bg-accent'} {isSelected(component.id) ? 'bg-accent' : ''}"
 						>
-							<Checkbox checked={isSelected(component.id)} class="mt-0.5" />
+							<Checkbox
+								checked={component.existsInBoth ? true : isSelected(component.id)}
+								disabled={component.existsInBoth}
+								class="mt-0.5"
+								style={component.existsInBoth ? `--tw-ring-color: ${organization.color || '#6b7280'}; background-color: ${organization.color || '#6b7280'}; border-color: ${organization.color || '#6b7280'};` : ''}
+							/>
 							<div class="flex-1 min-w-0 flex items-start justify-between gap-3">
 								<div class="flex-1 min-w-0">
 									<p class="font-medium text-sm truncate">{component.name}</p>
@@ -454,6 +479,25 @@
 									{/if}
 								</div>
 								<div class="flex items-center gap-1.5 flex-shrink-0">
+									{#if component.existsInBoth}
+										<Tooltip.Root>
+											<Tooltip.Trigger>
+												{#snippet child({ props })}
+													<Badge
+														{...props}
+														variant="outline"
+														class="text-xs"
+														style="background-color: {organization.color || '#6b7280'}20; color: {organization.color || '#6b7280'}; border-color: {organization.color || '#6b7280'}40;"
+													>
+														EXISTS IN BOTH
+													</Badge>
+												{/snippet}
+											</Tooltip.Trigger>
+											<Tooltip.Content side="top">
+												<p class="text-xs">This component already exists in the target organization</p>
+											</Tooltip.Content>
+										</Tooltip.Root>
+									{/if}
 									<Badge variant="outline" class="text-xs font-mono">
 										{component.type.toUpperCase()}
 									</Badge>

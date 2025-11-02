@@ -27,6 +27,8 @@ export interface SalesforceComponent {
 	// NEW: Track which org this component belongs to (for multi-org display)
 	sourceOrgId?: string;
 	sourceOrgName?: string;
+	// NEW: Track if component exists in both source and target orgs
+	existsInBoth?: boolean;
 }
 
 // Lightning Web Component
