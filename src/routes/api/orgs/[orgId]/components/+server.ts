@@ -97,7 +97,7 @@ export const GET: RequestHandler = async ({ params, url, locals }) => {
 		// Fetch cached components
 		const components = await getCachedComponents(org.id, filters);
 
-		// Transform to response format (exclude organization_id and internal metadata)
+		// Transform to response format (exclude organization_id)
 		const componentResponses: ComponentResponse[] = components.map((comp) => ({
 			id: comp.id,
 			component_id: comp.component_id,
@@ -109,7 +109,8 @@ export const GET: RequestHandler = async ({ params, url, locals }) => {
 			migration_status: comp.migration_status,
 			migration_date: comp.migration_date,
 			dependencies: comp.dependencies,
-			dependents: comp.dependents
+			dependents: comp.dependents,
+			metadata: comp.metadata
 		}));
 
 		// Build response

@@ -6,11 +6,11 @@
 	import * as Select from '$lib/components/ui/select';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import * as Collapsible from '$lib/components/ui/collapsible';
 	import { Skeleton } from '$lib/components/ui/skeleton';
-	import { Search, Info, RefreshCw, Ellipsis } from '@lucide/svelte';
+	import { Search, Info, RefreshCw, Ellipsis, ChevronDown, ChevronRight } from '@lucide/svelte';
 	import type { ComponentType, SalesforceComponent } from '$lib/types/salesforce';
 	import type { CachedOrganization } from '$lib/types/wizard';
-	import VirtualList from '$lib/components/ui/VirtualList.svelte';
 	import OrganizationCard from './OrganizationCard.svelte';
 
 	interface Props {
@@ -46,7 +46,25 @@
 	let searchQuery = $state('');
 	let selectedTab = $state<ComponentType | 'all'>('all');
 	let showSystemComponents = $state(false);
-	let hideExistingComponents = $state(true); // Hide components that exist in both orgs by default
+	let hideExistingComponents = $state(false); // Show components that exist in both orgs by default
+	let existingComponentsOpen = $state(false); // Collapsible state for existing components - collapsed by default
+	let expandedObjects = $state<Set<string>>(new Set()); // Track which custom objects are expanded
+	let autoSelectedIds = $state<Set<string>>(new Set()); // Track auto-selected "exists in both" components
+
+	// Auto-select components that exist in both orgs when components change
+	$effect(() => {
+		const existsInBothComponents = components.filter(c => c.existsInBoth);
+		const newAutoSelectedIds = new Set(existsInBothComponents.map(c => c.id));
+
+		// Auto-select these components if they're not already selected
+		existsInBothComponents.forEach(component => {
+			if (!isSelected(component.id)) {
+				onToggleComponent(component.id);
+			}
+		});
+
+		autoSelectedIds = newAutoSelectedIds;
+	});
 
 	// Format timestamp for display
 	function formatTimestamp(date: Date | null): string {
@@ -83,6 +101,37 @@
 			day: '2-digit',
 			year: 'numeric'
 		});
+	}
+
+	// Toggle expand/collapse state for a custom object
+	function toggleObjectExpansion(objectApiName: string) {
+		const newExpanded = new Set(expandedObjects);
+		if (newExpanded.has(objectApiName)) {
+			newExpanded.delete(objectApiName);
+		} else {
+			newExpanded.add(objectApiName);
+		}
+		expandedObjects = newExpanded;
+	}
+
+	// Check if an object is expanded
+	function isObjectExpanded(objectApiName: string): boolean {
+		return expandedObjects.has(objectApiName);
+	}
+
+	// Get custom fields for a specific custom object
+	function getCustomFieldsForObject(objectApiName: string): SalesforceComponent[] {
+		return components.filter(c => {
+			if (c.type !== 'field') return false;
+			// Fields have metadata.tableenumorid that contains the parent object API name
+			const parentObject = c.metadata?.tableenumorid;
+			return parentObject === objectApiName;
+		});
+	}
+
+	// Check if a component is a custom object (not a standard object)
+	function isCustomObject(component: SalesforceComponent): boolean {
+		return component.type === 'object' && component.apiName.endsWith('__c');
 	}
 
 	// Determine if a component is custom (user-created) or system (standard Salesforce)
@@ -238,12 +287,21 @@
 		return filtered;
 	});
 
-	// Get selectable components (exclude components that exist in both orgs)
-	const selectableTabComponents = $derived(() => {
-		return currentTabComponents().filter(c => !c.existsInBoth);
+	// Separate components that exist in both orgs from those that don't
+	const componentsExistingInBoth = $derived(() => {
+		return filteredComponents.filter(c => c.existsInBoth);
 	});
 
-	// Count selected components in current tab (only selectable ones)
+	const componentsToMigrate = $derived(() => {
+		return filteredComponents.filter(c => !c.existsInBoth);
+	});
+
+	// Get selectable components (now includes components that exist in both orgs)
+	const selectableTabComponents = $derived(() => {
+		return currentTabComponents();
+	});
+
+	// Count selected components in current tab (includes all components)
 	const currentTabSelectedCount = $derived(() => {
 		return selectableTabComponents().filter(c => selectedIds.has(c.id)).length;
 	});
@@ -386,7 +444,7 @@
 					class="mt-0.5"
 				/>
 				<span class="text-xs text-muted-foreground mt-0.5">
-					{currentFilterSelectedCount()} of {filteredComponents.filter(c => !c.existsInBoth).length} selected
+					{currentFilterSelectedCount()} of {filteredComponents.length} selected
 				</span>
 			</button>
 
@@ -453,74 +511,375 @@
 				<p class="text-sm">No components found</p>
 			</div>
 		{:else}
-			<VirtualList
-				items={filteredComponents}
-				itemHeight={90}
-				height={0}
-				scrollbarClass="scrollbar-white"
-			>
-				{#snippet children(component: SalesforceComponent)}
-						<button
-							onclick={() => !component.existsInBoth && onToggleComponent(component.id)}
-							disabled={component.existsInBoth}
-							class="group w-full flex items-start gap-2 p-2.5 mb-2 rounded-lg border transition-colors text-left {component.existsInBoth ? 'opacity-50 cursor-not-allowed' : 'hover:bg-accent'} {isSelected(component.id) ? 'bg-accent' : ''}"
-						>
-							<Checkbox
-								checked={component.existsInBoth ? true : isSelected(component.id)}
-								disabled={component.existsInBoth}
-								class="mt-0.5"
-								style={component.existsInBoth ? `--tw-ring-color: ${organization.color || '#6b7280'}; background-color: ${organization.color || '#6b7280'}; border-color: ${organization.color || '#6b7280'};` : ''}
-							/>
-							<div class="flex-1 min-w-0 flex items-start justify-between gap-3">
-								<div class="flex-1 min-w-0">
-									<p class="font-medium text-sm truncate">{component.name}</p>
-									{#if component.description}
-										<p class="text-xs text-muted-foreground mt-1 line-clamp-2">{component.description}</p>
-									{/if}
+			<!-- Scrollable container for both accordion and main list -->
+			<div class="flex-1 min-h-0 overflow-y-scroll scrollbar-white">
+				<!-- Accordion for components that exist in both orgs -->
+				{#if !hideExistingComponents && componentsExistingInBoth().length > 0}
+					<div class="mb-3">
+						<Collapsible.Root bind:open={existingComponentsOpen}>
+							<Collapsible.Trigger class="w-full">
+								<div class="flex items-center justify-between p-3 rounded-lg border bg-muted/50 hover:bg-muted transition-colors">
+									<div class="flex items-center gap-2">
+										<ChevronDown class="h-4 w-4 transition-transform {existingComponentsOpen ? 'rotate-180' : ''}" />
+										<span class="text-sm font-medium">
+											{componentsExistingInBoth().length} component{componentsExistingInBoth().length !== 1 ? 's' : ''} already exist{componentsExistingInBoth().length === 1 ? 's' : ''} in both organizations
+										</span>
+									</div>
+									<Badge
+										variant="outline"
+										class="text-xs"
+										style="background-color: {organization.color || '#6b7280'}20; color: {organization.color || '#6b7280'}; border-color: {organization.color || '#6b7280'}40;"
+									>
+										{existingComponentsOpen ? 'Collapse' : 'Expand'}
+									</Badge>
 								</div>
-								<div class="flex items-center gap-1.5 flex-shrink-0">
-									{#if component.existsInBoth}
+							</Collapsible.Trigger>
+							<Collapsible.Content>
+								<div class="mt-2 space-y-2">
+									{#each componentsExistingInBoth() as component}
+										<div>
+											<!-- Main component item -->
+											<div class="group w-full flex items-start gap-2 p-2.5 rounded-lg border transition-colors {isSelected(component.id) ? 'bg-accent' : ''}">
+												<!-- Expand/collapse button for custom objects -->
+												{#if isCustomObject(component)}
+													<button
+														onclick={(e) => {
+															e.stopPropagation();
+															toggleObjectExpansion(component.apiName);
+														}}
+														class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-all mt-0.5"
+														type="button"
+														aria-label="Toggle fields"
+													>
+														<ChevronRight class="h-4 w-4 transition-transform {isObjectExpanded(component.apiName) ? 'rotate-90' : ''}" />
+													</button>
+												{:else}
+													<div class="w-4 flex-shrink-0"></div>
+												{/if}
+
+												<button
+													onclick={() => {
+														// Prevent deselection of auto-selected components
+														if (!autoSelectedIds.has(component.id)) {
+															onToggleComponent(component.id);
+														}
+													}}
+													class="flex-shrink-0 mt-0.5 {autoSelectedIds.has(component.id) ? 'cursor-not-allowed' : ''}"
+													type="button"
+													aria-label="Select component"
+													disabled={autoSelectedIds.has(component.id)}
+												>
+													<Checkbox
+														checked={isSelected(component.id)}
+														disabled={autoSelectedIds.has(component.id)}
+														class={autoSelectedIds.has(component.id) ? 'opacity-60' : ''}
+													/>
+												</button>
+
+												<div class="flex-1 min-w-0 flex items-start justify-between gap-3">
+													<button
+														onclick={() => {
+															// Prevent deselection of auto-selected components
+															if (!autoSelectedIds.has(component.id)) {
+																onToggleComponent(component.id);
+															}
+														}}
+														class="flex-1 min-w-0 text-left"
+														type="button"
+													>
+														<p class="font-medium text-sm truncate">{component.name}</p>
+														{#if component.description}
+															<p class="text-xs text-muted-foreground mt-1 line-clamp-2">{component.description}</p>
+														{/if}
+													</button>
+													<div class="flex items-center gap-1.5 flex-shrink-0">
+														{#if component.existsInBoth}
+															<Tooltip.Root>
+																<Tooltip.Trigger>
+																	{#snippet child({ props })}
+																		<Badge
+																			{...props}
+																			variant="outline"
+																			class="text-xs"
+																			style="background-color: {organization.color || '#6b7280'}20; color: {organization.color || '#6b7280'}; border-color: {organization.color || '#6b7280'}40;"
+																		>
+																			EXISTS IN BOTH
+																		</Badge>
+																	{/snippet}
+																</Tooltip.Trigger>
+																<Tooltip.Content side="top">
+																	<p class="text-xs">This component already exists in the target organization</p>
+																</Tooltip.Content>
+															</Tooltip.Root>
+														{/if}
+														<Badge variant="outline" class="text-xs font-mono">
+															{component.type.toUpperCase()}
+														</Badge>
+														<Tooltip.Root>
+															<Tooltip.Trigger>
+																{#snippet child({ props })}
+																	<button {...props} class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100" type="button">
+																		<Info class="h-3.5 w-3.5" />
+																	</button>
+																{/snippet}
+															</Tooltip.Trigger>
+															<Tooltip.Content side="top">
+																<div class="flex flex-col gap-1">
+																	<span class="font-mono text-xs">API: {component.apiName}</span>
+																	<span class="text-xs">Created: {formatCreatedDate(component.metadata?.created_date)}</span>
+																</div>
+															</Tooltip.Content>
+														</Tooltip.Root>
+													</div>
+												</div>
+											</div>
+
+											<!-- Nested custom fields (if object is expanded) -->
+											{#if isCustomObject(component) && isObjectExpanded(component.apiName)}
+												{@const customFields = getCustomFieldsForObject(component.apiName)}
+												{#if customFields.length > 0}
+													<div class="ml-10 mt-2 space-y-1 border-l-2 border-muted pl-3">
+														{#each customFields as field}
+															<div class="group w-full flex items-start gap-2 p-2 rounded-lg border border-dashed transition-colors {isSelected(field.id) ? 'bg-accent/50' : ''}">
+																<button
+																	onclick={() => {
+																		// Prevent deselection of auto-selected components
+																		if (!autoSelectedIds.has(field.id)) {
+																			onToggleComponent(field.id);
+																		}
+																	}}
+																	class="flex-shrink-0 mt-0.5 {autoSelectedIds.has(field.id) ? 'cursor-not-allowed' : ''}"
+																	type="button"
+																	aria-label="Select field"
+																	disabled={autoSelectedIds.has(field.id)}
+																>
+																	<Checkbox
+																		checked={isSelected(field.id)}
+																		disabled={autoSelectedIds.has(field.id)}
+																		class={autoSelectedIds.has(field.id) ? 'opacity-60' : ''}
+																	/>
+																</button>
+																<div class="flex-1 min-w-0 flex items-start justify-between gap-3">
+																	<button
+																		onclick={() => {
+																			// Prevent deselection of auto-selected components
+																			if (!autoSelectedIds.has(field.id)) {
+																				onToggleComponent(field.id);
+																			}
+																		}}
+																		class="flex-1 min-w-0 text-left"
+																		type="button"
+																	>
+																		<p class="font-medium text-xs truncate">{field.name}</p>
+																		{#if field.description}
+																			<p class="text-xs text-muted-foreground mt-0.5 line-clamp-1">{field.description}</p>
+																		{/if}
+																	</button>
+																	<div class="flex items-center gap-1.5 flex-shrink-0">
+																		<Badge variant="outline" class="text-xs font-mono">
+																			FIELD
+																		</Badge>
+																		<Tooltip.Root>
+																			<Tooltip.Trigger>
+																				{#snippet child({ props })}
+																					<button {...props} class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100" type="button">
+																						<Info class="h-3.5 w-3.5" />
+																					</button>
+																				{/snippet}
+																			</Tooltip.Trigger>
+																			<Tooltip.Content side="top">
+																				<div class="flex flex-col gap-1">
+																					<span class="font-mono text-xs">API: {field.apiName}</span>
+																					<span class="text-xs">Created: {formatCreatedDate(field.metadata?.created_date)}</span>
+																				</div>
+																			</Tooltip.Content>
+																		</Tooltip.Root>
+																	</div>
+																</div>
+															</div>
+														{/each}
+													</div>
+												{/if}
+											{/if}
+										</div>
+									{/each}
+								</div>
+							</Collapsible.Content>
+						</Collapsible.Root>
+					</div>
+				{/if}
+
+				<!-- Main component list (components to migrate) -->
+				<div class="space-y-2">
+					{#each componentsToMigrate() as component}
+						<div>
+							<!-- Main component item -->
+							<div class="group w-full flex items-start gap-2 p-2.5 rounded-lg border transition-colors {isSelected(component.id) ? 'bg-accent' : ''}">
+								<!-- Expand/collapse button for custom objects -->
+								{#if isCustomObject(component)}
+									<button
+										onclick={(e) => {
+											e.stopPropagation();
+											toggleObjectExpansion(component.apiName);
+										}}
+										class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-all mt-0.5"
+										type="button"
+										aria-label="Toggle fields"
+									>
+										<ChevronRight class="h-4 w-4 transition-transform {isObjectExpanded(component.apiName) ? 'rotate-90' : ''}" />
+									</button>
+								{:else}
+									<div class="w-4 flex-shrink-0"></div>
+								{/if}
+
+								<button
+									onclick={() => {
+										// Prevent deselection of auto-selected components
+										if (!autoSelectedIds.has(component.id)) {
+											onToggleComponent(component.id);
+										}
+									}}
+									class="flex-shrink-0 mt-0.5 {autoSelectedIds.has(component.id) ? 'cursor-not-allowed' : ''}"
+									type="button"
+									aria-label="Select component"
+									disabled={autoSelectedIds.has(component.id)}
+								>
+									<Checkbox
+										checked={isSelected(component.id)}
+										disabled={autoSelectedIds.has(component.id)}
+										class={autoSelectedIds.has(component.id) ? 'opacity-60' : ''}
+									/>
+								</button>
+
+								<div class="flex-1 min-w-0 flex items-start justify-between gap-3">
+									<button
+										onclick={() => {
+											// Prevent deselection of auto-selected components
+											if (!autoSelectedIds.has(component.id)) {
+												onToggleComponent(component.id);
+											}
+										}}
+										class="flex-1 min-w-0 text-left"
+										type="button"
+									>
+										<p class="font-medium text-sm truncate">{component.name}</p>
+										{#if component.description}
+											<p class="text-xs text-muted-foreground mt-1 line-clamp-2">{component.description}</p>
+										{/if}
+									</button>
+									<div class="flex items-center gap-1.5 flex-shrink-0">
+										{#if component.existsInBoth}
+											<Tooltip.Root>
+												<Tooltip.Trigger>
+													{#snippet child({ props })}
+														<Badge
+															{...props}
+															variant="outline"
+															class="text-xs"
+															style="background-color: {organization.color || '#6b7280'}20; color: {organization.color || '#6b7280'}; border-color: {organization.color || '#6b7280'}40;"
+														>
+															EXISTS IN BOTH
+														</Badge>
+													{/snippet}
+												</Tooltip.Trigger>
+												<Tooltip.Content side="top">
+													<p class="text-xs">This component already exists in the target organization</p>
+												</Tooltip.Content>
+											</Tooltip.Root>
+										{/if}
+										<Badge variant="outline" class="text-xs font-mono">
+											{component.type.toUpperCase()}
+										</Badge>
 										<Tooltip.Root>
 											<Tooltip.Trigger>
 												{#snippet child({ props })}
-													<Badge
-														{...props}
-														variant="outline"
-														class="text-xs"
-														style="background-color: {organization.color || '#6b7280'}20; color: {organization.color || '#6b7280'}; border-color: {organization.color || '#6b7280'}40;"
-													>
-														EXISTS IN BOTH
-													</Badge>
+													<button {...props} class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100" type="button">
+														<Info class="h-3.5 w-3.5" />
+													</button>
 												{/snippet}
 											</Tooltip.Trigger>
 											<Tooltip.Content side="top">
-												<p class="text-xs">This component already exists in the target organization</p>
+												<div class="flex flex-col gap-1">
+													<span class="font-mono text-xs">API: {component.apiName}</span>
+													<span class="text-xs">Created: {formatCreatedDate(component.metadata?.created_date)}</span>
+												</div>
 											</Tooltip.Content>
 										</Tooltip.Root>
-									{/if}
-									<Badge variant="outline" class="text-xs font-mono">
-										{component.type.toUpperCase()}
-									</Badge>
-									<Tooltip.Root>
-										<Tooltip.Trigger>
-											{#snippet child({ props })}
-												<button {...props} class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100" type="button">
-													<Info class="h-3.5 w-3.5" />
-												</button>
-											{/snippet}
-										</Tooltip.Trigger>
-										<Tooltip.Content side="top">
-											<div class="flex flex-col gap-1">
-												<span class="font-mono text-xs">API: {component.apiName}</span>
-												<span class="text-xs">Created: {formatCreatedDate(component.metadata?.created_date)}</span>
-											</div>
-										</Tooltip.Content>
-									</Tooltip.Root>
+									</div>
 								</div>
 							</div>
-						</button>
-					{/snippet}
-				</VirtualList>
+
+							<!-- Nested custom fields (if object is expanded) -->
+							{#if isCustomObject(component) && isObjectExpanded(component.apiName)}
+								{@const customFields = getCustomFieldsForObject(component.apiName)}
+								{#if customFields.length > 0}
+									<div class="ml-10 mt-2 space-y-1 border-l-2 border-muted pl-3">
+										{#each customFields as field}
+											<div class="group w-full flex items-start gap-2 p-2 rounded-lg border border-dashed transition-colors {isSelected(field.id) ? 'bg-accent/50' : ''}">
+												<button
+													onclick={() => {
+														// Prevent deselection of auto-selected components
+														if (!autoSelectedIds.has(field.id)) {
+															onToggleComponent(field.id);
+														}
+													}}
+													class="flex-shrink-0 mt-0.5 {autoSelectedIds.has(field.id) ? 'cursor-not-allowed' : ''}"
+													type="button"
+													aria-label="Select field"
+													disabled={autoSelectedIds.has(field.id)}
+												>
+													<Checkbox
+														checked={isSelected(field.id)}
+														disabled={autoSelectedIds.has(field.id)}
+														class={autoSelectedIds.has(field.id) ? 'opacity-60' : ''}
+													/>
+												</button>
+												<div class="flex-1 min-w-0 flex items-start justify-between gap-3">
+													<button
+														onclick={() => {
+															// Prevent deselection of auto-selected components
+															if (!autoSelectedIds.has(field.id)) {
+																onToggleComponent(field.id);
+															}
+														}}
+														class="flex-1 min-w-0 text-left"
+														type="button"
+													>
+														<p class="font-medium text-xs truncate">{field.name}</p>
+														{#if field.description}
+															<p class="text-xs text-muted-foreground mt-0.5 line-clamp-1">{field.description}</p>
+														{/if}
+													</button>
+													<div class="flex items-center gap-1.5 flex-shrink-0">
+														<Badge variant="outline" class="text-xs font-mono">
+															FIELD
+														</Badge>
+														<Tooltip.Root>
+															<Tooltip.Trigger>
+																{#snippet child({ props })}
+																	<button {...props} class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100" type="button">
+																		<Info class="h-3.5 w-3.5" />
+																	</button>
+																{/snippet}
+															</Tooltip.Trigger>
+															<Tooltip.Content side="top">
+																<div class="flex flex-col gap-1">
+																	<span class="font-mono text-xs">API: {field.apiName}</span>
+																	<span class="text-xs">Created: {formatCreatedDate(field.metadata?.created_date)}</span>
+																</div>
+															</Tooltip.Content>
+														</Tooltip.Root>
+													</div>
+												</div>
+											</div>
+										{/each}
+									</div>
+								{/if}
+							{/if}
+						</div>
+					{/each}
+				</div>
+			</div>
 		{/if}
 	</div>
 </div>

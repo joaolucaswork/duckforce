@@ -54,5 +54,6 @@ export interface ComponentResponse {
 	migration_date: string | null;
 	dependencies: any;
 	dependents: any;
+	metadata: any;
 }
 
