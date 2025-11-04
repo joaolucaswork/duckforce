@@ -161,6 +161,27 @@
 		}
 	}
 
+	// Create a lookup map for parent object names to avoid O(n²) complexity
+	// Maps tableenumorid values to parent object names
+	const parentObjectMap = $derived.by(() => {
+		const map = new Map<string, string>();
+		
+		// Build map from objects
+		components.forEach(c => {
+			if (c.type === 'object') {
+				// Map by API name
+				map.set(c.apiName, c.name);
+				
+				// Also map by component_id if available
+				if (c.metadata?.component_id) {
+					map.set(c.metadata.component_id, c.name);
+				}
+			}
+		});
+		
+		return map;
+	});
+
 	// Extract parent object name from a field component
 	// Uses the field's metadata.tableenumorid to find the parent object
 	function getParentObjectName(field: SalesforceComponent): string {
@@ -169,26 +190,11 @@
 		const tableEnumOrId = field.metadata?.tableenumorid;
 		if (!tableEnumOrId) return 'Unknown';
 
-		// Try to find the parent object by matching tableenumorid
-		// tableenumorid can be:
-		// 1. An object API name (e.g., "Lead", "Account", "MyObject__c")
-		// 2. A Salesforce ID (e.g., "01IHp000004lR8NMAU")
-
-		// First, try to find by API name match
-		let parentObject = components.find(c =>
-			c.type === 'object' && c.apiName === tableEnumOrId
-		);
-
-		// If not found and tableEnumOrId looks like an ID, search by component_id in metadata
-		if (!parentObject && tableEnumOrId.match(/^[0-9a-zA-Z]{15,18}$/)) {
-			// Try to find by checking if any object has this Salesforce ID in their metadata
-			parentObject = components.find(c =>
-				c.type === 'object' && c.metadata?.component_id === tableEnumOrId
-			);
-		}
-
-		if (parentObject) {
-			return parentObject.name;
+		// Look up in the parent object map
+		const parentName = parentObjectMap.get(tableEnumOrId);
+		
+		if (parentName) {
+			return parentName;
 		}
 
 		// If still not found, return the tableenumorid itself (might be a standard object name)
