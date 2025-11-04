@@ -6,12 +6,13 @@
 	import * as Select from '$lib/components/ui/select';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import * as Collapsible from '$lib/components/ui/collapsible';
 	import { Skeleton } from '$lib/components/ui/skeleton';
-	import { Search, Info, RefreshCw, Ellipsis } from '@lucide/svelte';
+	import { Search, RefreshCw, Ellipsis, ChevronRight, Plus, Minus, Maximize2 } from '@lucide/svelte';
 	import type { ComponentType, SalesforceComponent } from '$lib/types/salesforce';
 	import type { CachedOrganization } from '$lib/types/wizard';
-	import VirtualList from '$lib/components/ui/VirtualList.svelte';
 	import OrganizationCard from './OrganizationCard.svelte';
+	import ComponentDetailsModal from './ComponentDetailsModal.svelte';
 
 	interface Props {
 		components: SalesforceComponent[];
@@ -44,8 +45,29 @@
 	}: Props = $props();
 
 	let searchQuery = $state('');
-	let selectedTab = $state<ComponentType | 'all'>('all');
+	let selectedTab = $state<ComponentType | 'all' | 'customFields'>('all');
 	let showSystemComponents = $state(false);
+	let hideExistingComponents = $state(false); // Show components that exist in both orgs by default
+	let existingComponentsOpen = $state(false); // Collapsible state for existing components - collapsed by default
+	let expandedObjects = $state<Set<string>>(new Set()); // Track which custom objects are expanded
+	let autoSelectedIds = $state<Set<string>>(new Set()); // Track auto-selected "exists in both" components
+	let detailsModalOpen = $state(false); // Track modal open state
+	let selectedComponentForDetails = $state<SalesforceComponent | null>(null); // Track selected component for details modal
+
+	// Auto-select components that exist in both orgs when components change
+	$effect(() => {
+		const existsInBothComponents = components.filter(c => c.existsInBoth);
+		const newAutoSelectedIds = new Set(existsInBothComponents.map(c => c.id));
+
+		// Auto-select these components if they're not already selected
+		existsInBothComponents.forEach(component => {
+			if (!isSelected(component.id)) {
+				onToggleComponent(component.id);
+			}
+		});
+
+		autoSelectedIds = newAutoSelectedIds;
+	});
 
 	// Format timestamp for display
 	function formatTimestamp(date: Date | null): string {
@@ -72,16 +94,105 @@
 		});
 	}
 
-	// Format creation date for display in tooltip
-	function formatCreatedDate(dateString: string | undefined): string {
-		if (!dateString) return 'Unknown';
 
-		const date = new Date(dateString);
-		return date.toLocaleDateString('en-US', {
-			month: '2-digit',
-			day: '2-digit',
-			year: 'numeric'
+
+	// Toggle expand/collapse state for a custom object
+	function toggleObjectExpansion(objectApiName: string) {
+		const newExpanded = new Set(expandedObjects);
+		if (newExpanded.has(objectApiName)) {
+			newExpanded.delete(objectApiName);
+		} else {
+			newExpanded.add(objectApiName);
+		}
+		expandedObjects = newExpanded;
+	}
+
+	// Check if an object is expanded
+	function isObjectExpanded(objectApiName: string): boolean {
+		return expandedObjects.has(objectApiName);
+	}
+
+	// Get custom fields for a specific custom object
+	function getCustomFieldsForObject(objectApiName: string): SalesforceComponent[] {
+		const fields = components.filter(c => {
+			if (c.type !== 'field') return false;
+
+			// For custom objects, the field's apiName is in format: "ObjectName__c.FieldName__c"
+			// For standard objects, it's: "ObjectName.FieldName__c"
+			// So we can extract the object name from the apiName
+
+			const fieldApiName = c.apiName;
+			if (!fieldApiName) return false;
+
+			// Extract object name from field API name (everything before the first dot)
+			const dotIndex = fieldApiName.indexOf('.');
+			if (dotIndex === -1) return false;
+
+			const objectNameFromApiName = fieldApiName.substring(0, dotIndex);
+
+			// Match against the object API name
+			return objectNameFromApiName === objectApiName;
 		});
+
+		return fields;
+	}
+
+	// Check if a component is a custom object (not a standard object)
+	function isCustomObject(component: SalesforceComponent): boolean {
+		return component.type === 'object' && component.apiName.endsWith('__c');
+	}
+
+	// Capitalize first letter of a string
+	function capitalizeFirst(str: string): string {
+		return str.charAt(0).toUpperCase() + str.slice(1);
+	}
+
+	// Open details modal for a component
+	function openDetailsModal(component: SalesforceComponent) {
+		selectedComponentForDetails = component;
+		detailsModalOpen = true;
+	}
+
+	// Handle modal open change
+	function handleModalOpenChange(open: boolean) {
+		detailsModalOpen = open;
+		if (!open) {
+			selectedComponentForDetails = null;
+		}
+	}
+
+	// Extract parent object name from a field component
+	// Uses the field's metadata.tableenumorid to find the parent object
+	function getParentObjectName(field: SalesforceComponent): string {
+		if (field.type !== 'field') return 'Unknown';
+
+		const tableEnumOrId = field.metadata?.tableenumorid;
+		if (!tableEnumOrId) return 'Unknown';
+
+		// Try to find the parent object by matching tableenumorid
+		// tableenumorid can be:
+		// 1. An object API name (e.g., "Lead", "Account", "MyObject__c")
+		// 2. A Salesforce ID (e.g., "01IHp000004lR8NMAU")
+
+		// First, try to find by API name match
+		let parentObject = components.find(c =>
+			c.type === 'object' && c.apiName === tableEnumOrId
+		);
+
+		// If not found and tableEnumOrId looks like an ID, search by component_id in metadata
+		if (!parentObject && tableEnumOrId.match(/^[0-9a-zA-Z]{15,18}$/)) {
+			// Try to find by checking if any object has this Salesforce ID in their metadata
+			parentObject = components.find(c =>
+				c.type === 'object' && c.metadata?.component_id === tableEnumOrId
+			);
+		}
+
+		if (parentObject) {
+			return parentObject.name;
+		}
+
+		// If still not found, return the tableenumorid itself (might be a standard object name)
+		return tableEnumOrId;
 	}
 
 	// Determine if a component is custom (user-created) or system (standard Salesforce)
@@ -123,7 +234,7 @@
 
 	// Filter components based on search and tab with memoization
 	const filteredComponents = $derived.by(() => {
-		const cacheKey = `${selectedTab}-${searchQuery}-${showSystemComponents}-${components.length}`;
+		const cacheKey = `${selectedTab}-${searchQuery}-${showSystemComponents}-${hideExistingComponents}-${components.length}`;
 
 		// Check if we can use cached result
 		if (filteredComponentsCache && filteredComponentsCache.key === cacheKey) {
@@ -137,9 +248,19 @@
 			filtered = filtered.filter(c => isCustomComponent(c));
 		}
 
+		// Filter by existsInBoth
+		if (hideExistingComponents) {
+			filtered = filtered.filter(c => !c.existsInBoth);
+		}
+
 		// Filter by type
 		if (selectedTab !== 'all') {
-			filtered = filtered.filter(c => c.type === selectedTab);
+			if (selectedTab === 'customFields') {
+				// Show only custom fields (fields with __c in apiName)
+				filtered = filtered.filter(c => c.type === 'field' && c.apiName.includes('__c'));
+			} else {
+				filtered = filtered.filter(c => c.type === selectedTab);
+			}
 		}
 
 		// Filter by search query
@@ -158,7 +279,7 @@
 
 	// Update cache after filteredComponents is computed
 	$effect(() => {
-		const cacheKey = `${selectedTab}-${searchQuery}-${showSystemComponents}-${components.length}`;
+		const cacheKey = `${selectedTab}-${searchQuery}-${showSystemComponents}-${hideExistingComponents}-${components.length}`;
 		filteredComponentsCache = {
 			key: cacheKey,
 			result: filteredComponents
@@ -168,23 +289,28 @@
 	// Memoize component counts
 	let componentCountsCache = $state<{
 		key: string;
-		result: Record<ComponentType | 'all', number>;
+		result: Record<ComponentType | 'all' | 'customFields', number>;
 	} | null>(null);
 
 	const componentCounts = $derived.by(() => {
-		const cacheKey = `${components.length}-${showSystemComponents}`;
+		const cacheKey = `${components.length}-${showSystemComponents}-${hideExistingComponents}`;
 
 		// Return cached counts if components haven't changed
 		if (componentCountsCache && componentCountsCache.key === cacheKey) {
 			return componentCountsCache.result;
 		}
 
-		// Filter components based on custom/system setting
-		const componentsToCount = showSystemComponents
+		// Filter components based on custom/system setting and existsInBoth
+		let componentsToCount = showSystemComponents
 			? components
 			: components.filter(c => isCustomComponent(c));
 
-		const counts: Record<ComponentType | 'all', number> = {
+		// Filter by existsInBoth
+		if (hideExistingComponents) {
+			componentsToCount = componentsToCount.filter(c => !c.existsInBoth);
+		}
+
+		const counts: Record<ComponentType | 'all' | 'customFields', number> = {
 			all: componentsToCount.length,
 			lwc: 0,
 			apex: 0,
@@ -192,11 +318,16 @@
 			field: 0,
 			trigger: 0,
 			visualforce: 0,
-			flow: 0
+			flow: 0,
+			customFields: 0
 		};
 
 		componentsToCount.forEach(c => {
 			counts[c.type]++;
+			// Count custom fields separately (fields ending with __c)
+			if (c.type === 'field' && c.apiName.includes('__c')) {
+				counts.customFields++;
+			}
 		});
 
 		return counts;
@@ -205,7 +336,7 @@
 	// Update counts cache after componentCounts is computed
 	$effect(() => {
 		componentCountsCache = {
-			key: `${components.length}-${showSystemComponents}`,
+			key: `${components.length}-${showSystemComponents}-${hideExistingComponents}`,
 			result: componentCounts
 		};
 	});
@@ -221,48 +352,67 @@
 
 		// Filter by type
 		if (selectedTab !== 'all') {
-			filtered = filtered.filter(c => c.type === selectedTab);
+			if (selectedTab === 'customFields') {
+				// Show only custom fields (fields with __c in apiName)
+				filtered = filtered.filter(c => c.type === 'field' && c.apiName.includes('__c'));
+			} else {
+				filtered = filtered.filter(c => c.type === selectedTab);
+			}
 		}
 
 		return filtered;
 	});
 
-	// Count selected components in current tab
+	// Separate components that exist in both orgs from those that don't
+	const componentsExistingInBoth = $derived(() => {
+		return filteredComponents.filter(c => c.existsInBoth);
+	});
+
+	const componentsToMigrate = $derived(() => {
+		return filteredComponents.filter(c => !c.existsInBoth);
+	});
+
+	// Get selectable components (now includes components that exist in both orgs)
+	const selectableTabComponents = $derived(() => {
+		return currentTabComponents();
+	});
+
+	// Count selected components in current tab (includes all components)
 	const currentTabSelectedCount = $derived(() => {
-		return currentTabComponents().filter(c => selectedIds.has(c.id)).length;
+		return selectableTabComponents().filter(c => selectedIds.has(c.id)).length;
 	});
 
-	// Count selected components in current filter (respects both type filter and search)
+	// Count selected components in current filter (respects both type filter and search, only selectable)
 	const currentFilterSelectedCount = $derived(() => {
-		return filteredComponents.filter(c => selectedIds.has(c.id)).length;
+		return filteredComponents.filter(c => !c.existsInBoth && selectedIds.has(c.id)).length;
 	});
 
-	// Calculate checkbox state for select all (based on current tab)
+	// Calculate checkbox state for select all (based on current tab, only selectable components)
 	const allSelected = $derived(() => {
-		const tabComponents = currentTabComponents();
-		return tabComponents.length > 0 && currentTabSelectedCount() === tabComponents.length;
+		const selectable = selectableTabComponents();
+		return selectable.length > 0 && currentTabSelectedCount() === selectable.length;
 	});
 
 	const someSelected = $derived(() => {
 		const count = currentTabSelectedCount();
-		const total = currentTabComponents().length;
+		const total = selectableTabComponents().length;
 		return count > 0 && count < total;
 	});
 
-	// Handle select all checkbox toggle (only for current tab)
+	// Handle select all checkbox toggle (only for current tab, only selectable components)
 	function handleSelectAllToggle() {
-		const tabComponents = currentTabComponents();
+		const selectable = selectableTabComponents();
 
 		if (allSelected()) {
-			// Deselect all components in current tab
-			tabComponents.forEach(component => {
+			// Deselect all selectable components in current tab
+			selectable.forEach(component => {
 				if (selectedIds.has(component.id)) {
 					onToggleComponent(component.id);
 				}
 			});
 		} else {
-			// Select all components in current tab
-			tabComponents.forEach(component => {
+			// Select all selectable components in current tab
+			selectable.forEach(component => {
 				if (!selectedIds.has(component.id)) {
 					onToggleComponent(component.id);
 				}
@@ -286,27 +436,47 @@
 			>
 				<Select.Trigger class="w-[180px] h-9">
 					{#if selectedTab === 'all'}
-						All
+						All ({componentCounts.all})
 					{:else if selectedTab === 'lwc'}
-						LWC
+						LWC ({componentCounts.lwc})
 					{:else if selectedTab === 'apex'}
-						Apex
+						Apex ({componentCounts.apex})
 					{:else if selectedTab === 'object'}
-						Object
+						Object ({componentCounts.object})
+					{:else if selectedTab === 'customFields'}
+						Custom Fields ({componentCounts.customFields})
+					{:else if selectedTab === 'trigger'}
+						Trigger ({componentCounts.trigger})
+					{:else if selectedTab === 'visualforce'}
+						Visualforce ({componentCounts.visualforce})
+					{:else if selectedTab === 'flow'}
+						Flow ({componentCounts.flow})
 					{/if}
 				</Select.Trigger>
 				<Select.Content>
 					<Select.Item value="all">
-						All
+						All ({componentCounts.all})
 					</Select.Item>
 					<Select.Item value="lwc">
-						LWC
+						LWC ({componentCounts.lwc})
 					</Select.Item>
 					<Select.Item value="apex">
-						Apex
+						Apex ({componentCounts.apex})
 					</Select.Item>
 					<Select.Item value="object">
-						Object
+						Object ({componentCounts.object})
+					</Select.Item>
+					<Select.Item value="customFields">
+						Custom Fields ({componentCounts.customFields})
+					</Select.Item>
+					<Select.Item value="trigger">
+						Trigger ({componentCounts.trigger})
+					</Select.Item>
+					<Select.Item value="visualforce">
+						Visualforce ({componentCounts.visualforce})
+					</Select.Item>
+					<Select.Item value="flow">
+						Flow ({componentCounts.flow})
 					</Select.Item>
 				</Select.Content>
 			</Select.Root>
@@ -407,6 +577,9 @@
 						<DropdownMenu.CheckboxItem bind:checked={showSystemComponents}>
 							Show System Components
 						</DropdownMenu.CheckboxItem>
+						<DropdownMenu.CheckboxItem bind:checked={hideExistingComponents}>
+							Hide Existing Components
+						</DropdownMenu.CheckboxItem>
 					</DropdownMenu.Content>
 				</DropdownMenu.Root>
 			</div>
@@ -434,50 +607,362 @@
 				<p class="text-sm">No components found</p>
 			</div>
 		{:else}
-			<VirtualList
-				items={filteredComponents}
-				itemHeight={90}
-				height={0}
-				scrollbarClass="scrollbar-white"
-			>
-				{#snippet children(component: SalesforceComponent)}
-						<button
-							onclick={() => onToggleComponent(component.id)}
-							class="group w-full flex items-start gap-2 p-2.5 mb-2 rounded-lg border hover:bg-accent transition-colors text-left {isSelected(component.id) ? 'bg-accent' : ''}"
-						>
-							<Checkbox checked={isSelected(component.id)} class="mt-0.5" />
-							<div class="flex-1 min-w-0 flex items-start justify-between gap-3">
-								<div class="flex-1 min-w-0">
-									<p class="font-medium text-sm truncate">{component.name}</p>
-									{#if component.description}
-										<p class="text-xs text-muted-foreground mt-1 line-clamp-2">{component.description}</p>
-									{/if}
+			<!-- Scrollable container for both accordion and main list -->
+			<div class="flex-1 min-h-0 overflow-y-scroll scrollbar-white">
+				<!-- Accordion for components that exist in both orgs -->
+				{#if !hideExistingComponents && componentsExistingInBoth().length > 0}
+					<!-- Full-width wrapper with bottom border -->
+					<div class="mb-3 -mx-4 bg-muted/30 border-b">
+						<Collapsible.Root bind:open={existingComponentsOpen}>
+							<Collapsible.Trigger class="w-full">
+								<div class="flex items-center gap-2 p-2.5 bg-muted/30 transition-colors" style="padding-left: 2.5rem; padding-right: 1rem;">
+									<div class="flex-1 min-w-0 flex items-center justify-between gap-3">
+										<span class="text-sm font-medium opacity-70">
+											{componentsExistingInBoth().length} already in both orgs
+										</span>
+										<div class="flex items-center gap-1.5 flex-shrink-0">
+											{#if existingComponentsOpen}
+												<Minus class="h-4 w-4 opacity-70" />
+											{:else}
+												<Plus class="h-4 w-4 opacity-70" />
+											{/if}
+										</div>
+									</div>
 								</div>
-								<div class="flex items-center gap-1.5 flex-shrink-0">
-									<Badge variant="outline" class="text-xs font-mono">
-										{component.type.toUpperCase()}
-									</Badge>
-									<Tooltip.Root>
-										<Tooltip.Trigger>
-											{#snippet child({ props })}
-												<button {...props} class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100" type="button">
-													<Info class="h-3.5 w-3.5" />
+							</Collapsible.Trigger>
+							<Collapsible.Content>
+								<div class="pb-3">
+									{#each componentsExistingInBoth() as component}
+										<div>
+											<!-- Main component item -->
+											<div class="group w-full flex items-start gap-2 p-2.5 border-b transition-colors {isSelected(component.id) ? 'bg-accent/30' : ''}" style="padding-left: 2.5rem; padding-right: 1rem;">
+												<button
+													onclick={() => {
+														// Prevent deselection of auto-selected components
+														if (!autoSelectedIds.has(component.id)) {
+															onToggleComponent(component.id);
+														}
+													}}
+													class="flex-shrink-0 mt-0.5 {autoSelectedIds.has(component.id) ? 'cursor-not-allowed' : ''}"
+													type="button"
+													aria-label="Select component"
+													disabled={autoSelectedIds.has(component.id)}
+												>
+													<Checkbox
+														checked={isSelected(component.id)}
+														disabled={autoSelectedIds.has(component.id)}
+														class={autoSelectedIds.has(component.id) ? 'opacity-60' : ''}
+													/>
 												</button>
-											{/snippet}
-										</Tooltip.Trigger>
-										<Tooltip.Content side="top">
-											<div class="flex flex-col gap-1">
-												<span class="font-mono text-xs">API: {component.apiName}</span>
-												<span class="text-xs">Created: {formatCreatedDate(component.metadata?.created_date)}</span>
+
+												<div class="flex-1 min-w-0 flex items-start justify-between gap-3">
+													<button
+														onclick={() => {
+															// Prevent deselection of auto-selected components
+															if (!autoSelectedIds.has(component.id)) {
+																onToggleComponent(component.id);
+															}
+														}}
+														class="flex-1 min-w-0 text-left"
+														type="button"
+													>
+														<p class="font-medium text-sm truncate">{component.name}</p>
+														{#if component.description}
+															<p class="text-xs text-muted-foreground mt-1 line-clamp-2">{component.description}</p>
+														{/if}
+													</button>
+													<div class="flex items-center gap-1.5 flex-shrink-0">
+														<!-- Show parent object name for fields when in Custom Fields tab -->
+														{#if selectedTab === 'customFields' && component.type === 'field'}
+															<Badge variant="secondary" class="text-xs font-mono">
+																{getParentObjectName(component)}
+															</Badge>
+														{:else}
+															<Badge variant="outline" class="text-xs font-mono">
+																{capitalizeFirst(component.type)}
+															</Badge>
+														{/if}
+														<Tooltip.Root>
+															<Tooltip.Trigger>
+																{#snippet child({ props })}
+																	<button
+																		{...props}
+																		onclick={(e) => {
+																			e.stopPropagation();
+																			openDetailsModal(component);
+																		}}
+																		class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100 p-1 -m-1"
+																		type="button"
+																	>
+																		<Maximize2 class="h-3.5 w-3.5" />
+																	</button>
+																{/snippet}
+															</Tooltip.Trigger>
+															<Tooltip.Content side="top">
+																<span class="text-xs">View details</span>
+															</Tooltip.Content>
+														</Tooltip.Root>
+													</div>
+												</div>
 											</div>
-										</Tooltip.Content>
-									</Tooltip.Root>
+
+											<!-- Nested custom fields (if object is expanded) -->
+											{#if isCustomObject(component) && isObjectExpanded(component.apiName)}
+												{@const customFields = getCustomFieldsForObject(component.apiName)}
+												{#if customFields.length > 0}
+													<div class="ml-10 border-l-2 border-muted pl-3">
+														{#each customFields as field}
+															<div class="group w-full flex items-start gap-2 p-2 border-b border-dashed transition-colors {isSelected(field.id) ? 'bg-accent/20' : ''}">
+																<button
+																	onclick={() => {
+																		// Prevent deselection of auto-selected components
+																		if (!autoSelectedIds.has(field.id)) {
+																			onToggleComponent(field.id);
+																		}
+																	}}
+																	class="flex-shrink-0 mt-0.5 {autoSelectedIds.has(field.id) ? 'cursor-not-allowed' : ''}"
+																	type="button"
+																	aria-label="Select field"
+																	disabled={autoSelectedIds.has(field.id)}
+																>
+																	<Checkbox
+																		checked={isSelected(field.id)}
+																		disabled={autoSelectedIds.has(field.id)}
+																		class={autoSelectedIds.has(field.id) ? 'opacity-60' : ''}
+																	/>
+																</button>
+																<div class="flex-1 min-w-0 flex items-start justify-between gap-3">
+																	<button
+																		onclick={() => {
+																			// Prevent deselection of auto-selected components
+																			if (!autoSelectedIds.has(field.id)) {
+																				onToggleComponent(field.id);
+																			}
+																		}}
+																		class="flex-1 min-w-0 text-left"
+																		type="button"
+																	>
+																		<p class="font-medium text-xs truncate">{field.name}</p>
+																		{#if field.description}
+																			<p class="text-xs text-muted-foreground mt-0.5 line-clamp-1">{field.description}</p>
+																		{/if}
+																	</button>
+																	<div class="flex items-center gap-1.5 flex-shrink-0">
+																		<Badge variant="outline" class="text-xs font-mono">
+																			Field
+																		</Badge>
+																		<Tooltip.Root>
+																			<Tooltip.Trigger>
+																				{#snippet child({ props })}
+																					<button
+																						{...props}
+																						onclick={(e) => {
+																							e.stopPropagation();
+																							openDetailsModal(field);
+																						}}
+																						class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100 p-1 -m-1"
+																						type="button"
+																					>
+																						<Maximize2 class="h-3.5 w-3.5" />
+																					</button>
+																				{/snippet}
+																			</Tooltip.Trigger>
+																			<Tooltip.Content side="top">
+																				<span class="text-xs">View details</span>
+																			</Tooltip.Content>
+																		</Tooltip.Root>
+																	</div>
+																</div>
+															</div>
+														{/each}
+													</div>
+												{/if}
+											{/if}
+										</div>
+									{/each}
+								</div>
+							</Collapsible.Content>
+						</Collapsible.Root>
+					</div>
+				{/if}
+
+				<!-- Main component list (components to migrate) -->
+				<div class="-mx-4">
+					{#each componentsToMigrate() as component}
+						<div>
+							<!-- Main component item -->
+							<div class="group w-full flex items-start gap-2 p-2.5 px-4 border-b transition-colors {isSelected(component.id) ? 'bg-accent/30' : ''}">
+								<!-- Expand/collapse button for custom objects -->
+								{#if isCustomObject(component)}
+									<button
+										onclick={(e) => {
+											e.stopPropagation();
+											toggleObjectExpansion(component.apiName);
+										}}
+										class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-all mt-0.5"
+										type="button"
+										aria-label="Toggle fields"
+									>
+										<ChevronRight class="h-4 w-4 transition-transform {isObjectExpanded(component.apiName) ? 'rotate-90' : ''}" />
+									</button>
+								{:else}
+									<div class="w-4 flex-shrink-0"></div>
+								{/if}
+
+								<button
+									onclick={() => {
+										// Prevent deselection of auto-selected components
+										if (!autoSelectedIds.has(component.id)) {
+											onToggleComponent(component.id);
+										}
+									}}
+									class="flex-shrink-0 mt-0.5 {autoSelectedIds.has(component.id) ? 'cursor-not-allowed' : ''}"
+									type="button"
+									aria-label="Select component"
+									disabled={autoSelectedIds.has(component.id)}
+								>
+									<Checkbox
+										checked={isSelected(component.id)}
+										disabled={autoSelectedIds.has(component.id)}
+										class={autoSelectedIds.has(component.id) ? 'opacity-60' : ''}
+									/>
+								</button>
+
+								<div class="flex-1 min-w-0 flex items-start justify-between gap-3">
+									<button
+										onclick={() => {
+											// Prevent deselection of auto-selected components
+											if (!autoSelectedIds.has(component.id)) {
+												onToggleComponent(component.id);
+											}
+										}}
+										class="flex-1 min-w-0 text-left"
+										type="button"
+									>
+										<p class="font-medium text-sm truncate">{component.name}</p>
+										{#if component.description}
+											<p class="text-xs text-muted-foreground mt-1 line-clamp-2">{component.description}</p>
+										{/if}
+									</button>
+									<div class="flex items-center gap-1.5 flex-shrink-0">
+										<!-- Show parent object name for fields when in Custom Fields tab -->
+										{#if selectedTab === 'customFields' && component.type === 'field'}
+											<Badge variant="secondary" class="text-xs font-mono">
+												{getParentObjectName(component)}
+											</Badge>
+										{:else}
+											<Badge variant="outline" class="text-xs font-mono">
+												{capitalizeFirst(component.type)}
+											</Badge>
+										{/if}
+										<Tooltip.Root>
+											<Tooltip.Trigger>
+												{#snippet child({ props })}
+													<button
+														{...props}
+														onclick={(e) => {
+															e.stopPropagation();
+															openDetailsModal(component);
+														}}
+														class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100 p-1 -m-1"
+														type="button"
+													>
+														<Maximize2 class="h-3.5 w-3.5" />
+													</button>
+												{/snippet}
+											</Tooltip.Trigger>
+											<Tooltip.Content side="top">
+												<span class="text-xs">View details</span>
+											</Tooltip.Content>
+										</Tooltip.Root>
+									</div>
 								</div>
 							</div>
-						</button>
-					{/snippet}
-				</VirtualList>
+
+							<!-- Nested custom fields (if object is expanded) -->
+							{#if isCustomObject(component) && isObjectExpanded(component.apiName)}
+								{@const customFields = getCustomFieldsForObject(component.apiName)}
+								{#if customFields.length > 0}
+									<div class="ml-10 border-l-2 border-muted pl-3">
+										{#each customFields as field}
+											<div class="group w-full flex items-start gap-2 p-2 border-b border-dashed transition-colors {isSelected(field.id) ? 'bg-accent/20' : ''}">
+												<button
+													onclick={() => {
+														// Prevent deselection of auto-selected components
+														if (!autoSelectedIds.has(field.id)) {
+															onToggleComponent(field.id);
+														}
+													}}
+													class="flex-shrink-0 mt-0.5 {autoSelectedIds.has(field.id) ? 'cursor-not-allowed' : ''}"
+													type="button"
+													aria-label="Select field"
+													disabled={autoSelectedIds.has(field.id)}
+												>
+													<Checkbox
+														checked={isSelected(field.id)}
+														disabled={autoSelectedIds.has(field.id)}
+														class={autoSelectedIds.has(field.id) ? 'opacity-60' : ''}
+													/>
+												</button>
+												<div class="flex-1 min-w-0 flex items-start justify-between gap-3">
+													<button
+														onclick={() => {
+															// Prevent deselection of auto-selected components
+															if (!autoSelectedIds.has(field.id)) {
+																onToggleComponent(field.id);
+															}
+														}}
+														class="flex-1 min-w-0 text-left"
+														type="button"
+													>
+														<p class="font-medium text-xs truncate">{field.name}</p>
+														{#if field.description}
+															<p class="text-xs text-muted-foreground mt-0.5 line-clamp-1">{field.description}</p>
+														{/if}
+													</button>
+													<div class="flex items-center gap-1.5 flex-shrink-0">
+														<Badge variant="outline" class="text-xs font-mono">
+															Field
+														</Badge>
+														<Tooltip.Root>
+															<Tooltip.Trigger>
+																{#snippet child({ props })}
+																	<button
+																		{...props}
+																		onclick={(e) => {
+																			e.stopPropagation();
+																			openDetailsModal(field);
+																		}}
+																		class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100 p-1 -m-1"
+																		type="button"
+																	>
+																		<Maximize2 class="h-3.5 w-3.5" />
+																	</button>
+																{/snippet}
+															</Tooltip.Trigger>
+															<Tooltip.Content side="top">
+																<span class="text-xs">View details</span>
+															</Tooltip.Content>
+														</Tooltip.Root>
+													</div>
+												</div>
+											</div>
+										{/each}
+									</div>
+								{/if}
+							{/if}
+						</div>
+					{/each}
+				</div>
+			</div>
 		{/if}
 	</div>
 </div>
+
+<!-- Component Details Modal -->
+<ComponentDetailsModal
+	component={selectedComponentForDetails}
+	open={detailsModalOpen}
+	onOpenChange={handleModalOpenChange}
+/>
 

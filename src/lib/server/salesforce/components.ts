@@ -20,7 +20,7 @@ export async function fetchLightningComponents(conn: Connection): Promise<Compon
 		
 		// Query LWC bundles using Tooling API
 		const result = await conn.tooling.query(
-			`SELECT Id, DeveloperName, NamespacePrefix, Description, MasterLabel, CreatedDate
+			`SELECT Id, DeveloperName, NamespacePrefix, Description, MasterLabel, CreatedDate, LastModifiedDate
 			 FROM LightningComponentBundle
 			 WHERE ManageableState IN ('unmanaged', 'installed')
 			 ORDER BY DeveloperName`
@@ -38,7 +38,8 @@ export async function fetchLightningComponents(conn: Connection): Promise<Compon
 			metadata: {
 				developername: record.DeveloperName,
 				masterlabel: record.MasterLabel,
-				created_date: record.CreatedDate
+				created_date: record.CreatedDate,
+				last_modified_date: record.LastModifiedDate
 			},
 			dependencies: [],
 			dependents: []
@@ -64,7 +65,7 @@ export async function fetchApexClasses(conn: Connection): Promise<ComponentInser
 		
 		// Query Apex classes using Tooling API
 		const result = await conn.tooling.query(
-			`SELECT Id, Name, NamespacePrefix, ApiVersion, Status, IsValid, LengthWithoutComments, CreatedDate
+			`SELECT Id, Name, NamespacePrefix, ApiVersion, Status, IsValid, LengthWithoutComments, CreatedDate, LastModifiedDate
 			 FROM ApexClass
 			 WHERE ManageableState IN ('unmanaged', 'installed')
 			 ORDER BY Name`
@@ -84,7 +85,8 @@ export async function fetchApexClasses(conn: Connection): Promise<ComponentInser
 				status: record.Status,
 				isvalid: record.IsValid,
 				lengthwithoutcomments: record.LengthWithoutComments,
-				created_date: record.CreatedDate
+				created_date: record.CreatedDate,
+				last_modified_date: record.LastModifiedDate
 			},
 			dependencies: [],
 			dependents: []
@@ -111,7 +113,7 @@ export async function fetchCustomObjects(conn: Connection): Promise<ComponentIns
 		// Query custom objects using Tooling API
 		// Note: CustomObject doesn't have MasterLabel field, only DeveloperName
 		const result = await conn.tooling.query(
-			`SELECT Id, DeveloperName, NamespacePrefix, Description, CreatedDate
+			`SELECT Id, DeveloperName, NamespacePrefix, Description, CreatedDate, LastModifiedDate
 			 FROM CustomObject
 			 WHERE ManageableState IN ('unmanaged', 'installed')
 			 ORDER BY DeveloperName`
@@ -128,7 +130,8 @@ export async function fetchCustomObjects(conn: Connection): Promise<ComponentIns
 			namespace: record.NamespacePrefix || null,
 			metadata: {
 				developername: record.DeveloperName,
-				created_date: record.CreatedDate
+				created_date: record.CreatedDate,
+				last_modified_date: record.LastModifiedDate
 			},
 			dependencies: [],
 			dependents: []
@@ -156,7 +159,7 @@ export async function fetchCustomFields(conn: Connection): Promise<ComponentInse
 		// Note: CustomField in Tooling API has very limited fields available
 		// We can only reliably query: Id, DeveloperName, NamespacePrefix, TableEnumOrId
 		const result = await conn.tooling.query(
-			`SELECT Id, DeveloperName, NamespacePrefix, TableEnumOrId, CreatedDate
+			`SELECT Id, DeveloperName, NamespacePrefix, TableEnumOrId, CreatedDate, LastModifiedDate
 			 FROM CustomField
 			 WHERE ManageableState IN ('unmanaged', 'installed')
 			 ORDER BY TableEnumOrId, DeveloperName
@@ -175,7 +178,8 @@ export async function fetchCustomFields(conn: Connection): Promise<ComponentInse
 			metadata: {
 				developername: record.DeveloperName,
 				tableenumorid: record.TableEnumOrId,
-				created_date: record.CreatedDate
+				created_date: record.CreatedDate,
+				last_modified_date: record.LastModifiedDate
 			},
 			dependencies: [],
 			dependents: []
@@ -201,7 +205,7 @@ export async function fetchTriggers(conn: Connection): Promise<ComponentInsert[]
 		
 		// Query triggers using Tooling API
 		const result = await conn.tooling.query(
-			`SELECT Id, Name, NamespacePrefix, TableEnumOrId, ApiVersion, Status, IsValid, CreatedDate
+			`SELECT Id, Name, NamespacePrefix, TableEnumOrId, ApiVersion, Status, IsValid, CreatedDate, LastModifiedDate
 			 FROM ApexTrigger
 			 WHERE ManageableState IN ('unmanaged', 'installed')
 			 ORDER BY Name`
@@ -221,7 +225,8 @@ export async function fetchTriggers(conn: Connection): Promise<ComponentInsert[]
 				apiversion: record.ApiVersion,
 				status: record.Status,
 				isvalid: record.IsValid,
-				created_date: record.CreatedDate
+				created_date: record.CreatedDate,
+				last_modified_date: record.LastModifiedDate
 			},
 			dependencies: [],
 			dependents: []
@@ -248,7 +253,7 @@ export async function fetchVisualforcePages(conn: Connection): Promise<Component
 		// Query Visualforce pages using Tooling API
 		// Note: ApexPage doesn't have MasterLabel in Tooling API, only Name
 		const result = await conn.tooling.query(
-			`SELECT Id, Name, NamespacePrefix, ApiVersion, Description, CreatedDate
+			`SELECT Id, Name, NamespacePrefix, ApiVersion, Description, CreatedDate, LastModifiedDate
 			 FROM ApexPage
 			 WHERE ManageableState IN ('unmanaged', 'installed')
 			 ORDER BY Name`
@@ -266,7 +271,8 @@ export async function fetchVisualforcePages(conn: Connection): Promise<Component
 			metadata: {
 				name: record.Name,
 				apiversion: record.ApiVersion,
-				created_date: record.CreatedDate
+				created_date: record.CreatedDate,
+				last_modified_date: record.LastModifiedDate
 			},
 			dependencies: [],
 			dependents: []
@@ -293,7 +299,7 @@ export async function fetchFlows(conn: Connection): Promise<ComponentInsert[]> {
 		// Query flows using Tooling API
 		// Note: FlowDefinition has limited fields available in Tooling API
 		const result = await conn.tooling.query(
-			`SELECT Id, DeveloperName, NamespacePrefix, Description, ActiveVersionId, CreatedDate
+			`SELECT Id, DeveloperName, NamespacePrefix, Description, ActiveVersionId, CreatedDate, LastModifiedDate
 			 FROM FlowDefinition
 			 WHERE ManageableState IN ('unmanaged', 'installed')
 			 ORDER BY DeveloperName`
@@ -311,7 +317,8 @@ export async function fetchFlows(conn: Connection): Promise<ComponentInsert[]> {
 			metadata: {
 				developername: record.DeveloperName,
 				activeversionid: record.ActiveVersionId,
-				created_date: record.CreatedDate
+				created_date: record.CreatedDate,
+				last_modified_date: record.LastModifiedDate
 			},
 			dependencies: [],
 			dependents: []

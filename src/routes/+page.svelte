@@ -23,7 +23,9 @@
 	onMount(() => {
 		// Safe to use onAuthStateChange on client-side for email confirmation
 		// The session is validated server-side via safeGetSession() in hooks.server.ts
+		// We only check event type and session existence, not using user object from session
 		const { data: authListener } = data.supabase.auth.onAuthStateChange(async (event, session) => {
+			// Only checking if session exists after SIGNED_IN event - actual user validation is server-side
 			if (event === 'SIGNED_IN' && session) {
 				// User just signed in (via email confirmation or other means)
 				console.log('User signed in, redirecting to wizard');

@@ -5,7 +5,7 @@
 	import { Label } from '$lib/components/ui/label';
 	import * as Alert from '$lib/components/ui/alert';
 	import * as Card from '$lib/components/ui/card';
-	import { AlertCircle, Loader2, Mail } from '@lucide/svelte';
+	import { CircleAlert, LoaderCircle, Mail } from '@lucide/svelte';
 	import Logo from '$lib/components/Logo.svelte';
 	import OTPInput from '$lib/components/auth/OTPInput.svelte';
 	import type { PageData } from './$types';
@@ -217,7 +217,7 @@
 
 						{#if error}
 							<Alert.Root variant="destructive">
-								<AlertCircle class="h-4 w-4" />
+								<CircleAlert class="h-4 w-4" />
 								<Alert.Description>{error}</Alert.Description>
 							</Alert.Root>
 						{/if}
@@ -261,7 +261,7 @@
 					<form onsubmit={handleSignup} class="space-y-4">
 						{#if error}
 							<Alert.Root variant="destructive">
-								<AlertCircle class="h-4 w-4" />
+								<CircleAlert class="h-4 w-4" />
 								<Alert.Description>{error}</Alert.Description>
 							</Alert.Root>
 						{/if}
@@ -308,7 +308,7 @@
 
 						<Button type="submit" class="w-full" disabled={loading}>
 							{#if loading}
-								<Loader2 class="mr-2 h-4 w-4 animate-spin" />
+								<LoaderCircle class="mr-2 h-4 w-4 animate-spin" />
 								Creating account...
 							{:else}
 								Create account

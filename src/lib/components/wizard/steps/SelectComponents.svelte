@@ -54,6 +54,46 @@
 		availableComponents.filter(c => c.sourceOrgId === selectedTargetOrgId)
 	);
 
+	// Create a map of target components for quick lookup by apiName and type
+	const targetComponentsMap = $derived(() => {
+		const map = new Map<string, SalesforceComponent>();
+		targetComponents().forEach(comp => {
+			const key = `${comp.apiName}|${comp.type}`;
+			map.set(key, comp);
+		});
+		return map;
+	});
+
+	// Mark source components that exist in both orgs
+	const sourceComponentsWithExistsFlag = $derived(() => {
+		return sourceComponents().map(comp => {
+			const key = `${comp.apiName}|${comp.type}`;
+			const existsInTarget = targetComponentsMap().has(key);
+			return {
+				...comp,
+				existsInBoth: existsInTarget
+			};
+		});
+	});
+
+	// Mark target components that exist in both orgs
+	const targetComponentsWithExistsFlag = $derived(() => {
+		const sourceMap = new Map<string, SalesforceComponent>();
+		sourceComponents().forEach(comp => {
+			const key = `${comp.apiName}|${comp.type}`;
+			sourceMap.set(key, comp);
+		});
+
+		return targetComponents().map(comp => {
+			const key = `${comp.apiName}|${comp.type}`;
+			const existsInSource = sourceMap.has(key);
+			return {
+				...comp,
+				existsInBoth: existsInSource
+			};
+		});
+	});
+
 	// COMMENTED OUT: Memoization and filtering for unified view
 	/*
 	// Memoization: Store filtered results by cache key
@@ -325,7 +365,10 @@
 				dependents: Array.isArray(comp.dependents) ? comp.dependents : [],
 				migrationStatus: 'pending' as const,
 				migrationDate: undefined,
-				metadata: comp.metadata || {}
+				metadata: {
+					...(comp.metadata || {}),
+					component_id: comp.component_id // Store Salesforce component_id in metadata
+				}
 			}));
 
 			console.log('[RefreshComponents] Fetched', updatedComponents.length, 'updated components from source org');
@@ -402,7 +445,10 @@
 				dependents: Array.isArray(comp.dependents) ? comp.dependents : [],
 				migrationStatus: 'pending' as const,
 				migrationDate: undefined,
-				metadata: comp.metadata || {}
+				metadata: {
+					...(comp.metadata || {}),
+					component_id: comp.component_id // Store Salesforce component_id in metadata
+				}
 			}));
 
 			console.log('[RefreshComponents] Fetched', updatedComponents.length, 'updated components from target org');
@@ -568,7 +614,7 @@
 				<!-- Source Org Panel -->
 				<div class="border rounded-lg p-4 flex flex-col min-h-0">
 					<ComponentListPanel
-						components={sourceComponents()}
+						components={sourceComponentsWithExistsFlag()}
 						selectedIds={selectedIds}
 						orgId={selectedSourceOrgId || ''}
 						organization={sourceOrg()!}
@@ -586,7 +632,7 @@
 				<!-- Target Org Panel -->
 				<div class="border rounded-lg p-4 flex flex-col min-h-0">
 					<ComponentListPanel
-						components={targetComponents()}
+						components={targetComponentsWithExistsFlag()}
 						selectedIds={selectedIds}
 						orgId={selectedTargetOrgId || ''}
 						organization={targetOrg()!}

@@ -75,7 +75,7 @@ export async function cacheComponents(
 
 /**
  * Get cached components for an organization
- * 
+ *
  * @param organizationId - The database ID (UUID) of the organization
  * @param filters - Optional filters for type and search
  * @returns Array of cached components
@@ -88,31 +88,57 @@ export async function getCachedComponents(
 		migrationStatus?: 'pending' | 'in-progress' | 'completed' | 'blocked' | 'skipped';
 	}
 ): Promise<SalesforceComponent[]> {
-	let query = supabaseAdmin
-		.from('salesforce_components')
-		.select('*')
-		.eq('organization_id', organizationId);
+	console.log(`[DB] Fetching cached components for org ${organizationId}`);
 
-	if (filters?.type) {
-		query = query.eq('type', filters.type);
+	// Fetch all components in batches to handle orgs with >1000 components
+	// Supabase has a default limit of 1000 rows per query
+	const allComponents: SalesforceComponent[] = [];
+	const batchSize = 1000;
+	let offset = 0;
+	let hasMore = true;
+
+	while (hasMore) {
+		let query = supabaseAdmin
+			.from('salesforce_components')
+			.select('*')
+			.eq('organization_id', organizationId);
+
+		if (filters?.type) {
+			query = query.eq('type', filters.type);
+		}
+
+		if (filters?.migrationStatus) {
+			query = query.eq('migration_status', filters.migrationStatus);
+		}
+
+		if (filters?.search) {
+			query = query.or(`name.ilike.%${filters.search}%,api_name.ilike.%${filters.search}%`);
+		}
+
+		// Add pagination
+		query = query.order('name').range(offset, offset + batchSize - 1);
+
+		const { data, error } = await query;
+
+		if (error) {
+			console.error('[DB] Error fetching cached components:', error);
+			throw error;
+		}
+
+		if (data && data.length > 0) {
+			allComponents.push(...data);
+			console.log(`[DB] Fetched batch: ${data.length} components (offset: ${offset}, total so far: ${allComponents.length})`);
+
+			// Check if we got a full batch, indicating there might be more
+			hasMore = data.length === batchSize;
+			offset += batchSize;
+		} else {
+			hasMore = false;
+		}
 	}
 
-	if (filters?.migrationStatus) {
-		query = query.eq('migration_status', filters.migrationStatus);
-	}
-
-	if (filters?.search) {
-		query = query.or(`name.ilike.%${filters.search}%,api_name.ilike.%${filters.search}%`);
-	}
-
-	const { data, error } = await query.order('name');
-
-	if (error) {
-		console.error('Error fetching cached components:', error);
-		throw error;
-	}
-
-	return data || [];
+	console.log(`[DB] Total components fetched: ${allComponents.length}`);
+	return allComponents;
 }
 
 /**
@@ -207,7 +233,7 @@ export async function bulkUpdateComponentStatus(
 
 /**
  * Get component count by migration status
- * 
+ *
  * @param organizationId - The database ID (UUID) of the organization
  * @returns Object with counts for each status
  */
@@ -219,14 +245,31 @@ export async function getComponentStatusCounts(organizationId: string): Promise<
 	skipped: number;
 	total: number;
 }> {
-	const { data, error } = await supabaseAdmin
-		.from('salesforce_components')
-		.select('migration_status')
-		.eq('organization_id', organizationId);
+	// Fetch all migration statuses in batches to handle orgs with >1000 components
+	const allStatuses: Array<{ migration_status: string }> = [];
+	const batchSize = 1000;
+	let offset = 0;
+	let hasMore = true;
 
-	if (error) {
-		console.error('Error fetching component status counts:', error);
-		throw error;
+	while (hasMore) {
+		const { data, error } = await supabaseAdmin
+			.from('salesforce_components')
+			.select('migration_status')
+			.eq('organization_id', organizationId)
+			.range(offset, offset + batchSize - 1);
+
+		if (error) {
+			console.error('[DB] Error fetching component status counts:', error);
+			throw error;
+		}
+
+		if (data && data.length > 0) {
+			allStatuses.push(...data);
+			hasMore = data.length === batchSize;
+			offset += batchSize;
+		} else {
+			hasMore = false;
+		}
 	}
 
 	const counts = {
@@ -235,10 +278,10 @@ export async function getComponentStatusCounts(organizationId: string): Promise<
 		completed: 0,
 		blocked: 0,
 		skipped: 0,
-		total: data?.length || 0
+		total: allStatuses.length
 	};
 
-	data?.forEach((component) => {
+	allStatuses.forEach((component) => {
 		switch (component.migration_status) {
 			case 'pending':
 				counts.pending++;
