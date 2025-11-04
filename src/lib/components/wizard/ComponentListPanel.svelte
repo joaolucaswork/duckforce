@@ -8,10 +8,11 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import { Skeleton } from '$lib/components/ui/skeleton';
-	import { Search, Info, RefreshCw, Ellipsis, ChevronRight, Plus, Minus } from '@lucide/svelte';
+	import { Search, RefreshCw, Ellipsis, ChevronRight, Plus, Minus, Maximize2 } from '@lucide/svelte';
 	import type { ComponentType, SalesforceComponent } from '$lib/types/salesforce';
 	import type { CachedOrganization } from '$lib/types/wizard';
 	import OrganizationCard from './OrganizationCard.svelte';
+	import ComponentDetailsModal from './ComponentDetailsModal.svelte';
 
 	interface Props {
 		components: SalesforceComponent[];
@@ -50,6 +51,8 @@
 	let existingComponentsOpen = $state(false); // Collapsible state for existing components - collapsed by default
 	let expandedObjects = $state<Set<string>>(new Set()); // Track which custom objects are expanded
 	let autoSelectedIds = $state<Set<string>>(new Set()); // Track auto-selected "exists in both" components
+	let detailsModalOpen = $state(false); // Track modal open state
+	let selectedComponentForDetails = $state<SalesforceComponent | null>(null); // Track selected component for details modal
 
 	// Auto-select components that exist in both orgs when components change
 	$effect(() => {
@@ -91,17 +94,7 @@
 		});
 	}
 
-	// Format creation date for display in tooltip
-	function formatCreatedDate(dateString: string | undefined): string {
-		if (!dateString) return 'Unknown';
 
-		const date = new Date(dateString);
-		return date.toLocaleDateString('en-US', {
-			month: '2-digit',
-			day: '2-digit',
-			year: 'numeric'
-		});
-	}
 
 	// Toggle expand/collapse state for a custom object
 	function toggleObjectExpansion(objectApiName: string) {
@@ -152,6 +145,20 @@
 	// Capitalize first letter of a string
 	function capitalizeFirst(str: string): string {
 		return str.charAt(0).toUpperCase() + str.slice(1);
+	}
+
+	// Open details modal for a component
+	function openDetailsModal(component: SalesforceComponent) {
+		selectedComponentForDetails = component;
+		detailsModalOpen = true;
+	}
+
+	// Handle modal open change
+	function handleModalOpenChange(open: boolean) {
+		detailsModalOpen = open;
+		if (!open) {
+			selectedComponentForDetails = null;
+		}
 	}
 
 	// Extract parent object name from a field component
@@ -678,16 +685,21 @@
 														<Tooltip.Root>
 															<Tooltip.Trigger>
 																{#snippet child({ props })}
-																	<button {...props} class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100" type="button">
-																		<Info class="h-3.5 w-3.5" />
+																	<button
+																		{...props}
+																		onclick={(e) => {
+																			e.stopPropagation();
+																			openDetailsModal(component);
+																		}}
+																		class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100 p-1 -m-1"
+																		type="button"
+																	>
+																		<Maximize2 class="h-3.5 w-3.5" />
 																	</button>
 																{/snippet}
 															</Tooltip.Trigger>
 															<Tooltip.Content side="top">
-																<div class="flex flex-col gap-1">
-																	<span class="font-mono text-xs">API: {component.apiName}</span>
-																	<span class="text-xs">Created: {formatCreatedDate(component.metadata?.created_date)}</span>
-																</div>
+																<span class="text-xs">View details</span>
 															</Tooltip.Content>
 														</Tooltip.Root>
 													</div>
@@ -742,16 +754,21 @@
 																		<Tooltip.Root>
 																			<Tooltip.Trigger>
 																				{#snippet child({ props })}
-																					<button {...props} class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100" type="button">
-																						<Info class="h-3.5 w-3.5" />
+																					<button
+																						{...props}
+																						onclick={(e) => {
+																							e.stopPropagation();
+																							openDetailsModal(field);
+																						}}
+																						class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100 p-1 -m-1"
+																						type="button"
+																					>
+																						<Maximize2 class="h-3.5 w-3.5" />
 																					</button>
 																				{/snippet}
 																			</Tooltip.Trigger>
 																			<Tooltip.Content side="top">
-																				<div class="flex flex-col gap-1">
-																					<span class="font-mono text-xs">API: {field.apiName}</span>
-																					<span class="text-xs">Created: {formatCreatedDate(field.metadata?.created_date)}</span>
-																				</div>
+																				<span class="text-xs">View details</span>
 																			</Tooltip.Content>
 																		</Tooltip.Root>
 																	</div>
@@ -841,16 +858,21 @@
 										<Tooltip.Root>
 											<Tooltip.Trigger>
 												{#snippet child({ props })}
-													<button {...props} class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100" type="button">
-														<Info class="h-3.5 w-3.5" />
+													<button
+														{...props}
+														onclick={(e) => {
+															e.stopPropagation();
+															openDetailsModal(component);
+														}}
+														class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100 p-1 -m-1"
+														type="button"
+													>
+														<Maximize2 class="h-3.5 w-3.5" />
 													</button>
 												{/snippet}
 											</Tooltip.Trigger>
 											<Tooltip.Content side="top">
-												<div class="flex flex-col gap-1">
-													<span class="font-mono text-xs">API: {component.apiName}</span>
-													<span class="text-xs">Created: {formatCreatedDate(component.metadata?.created_date)}</span>
-												</div>
+												<span class="text-xs">View details</span>
 											</Tooltip.Content>
 										</Tooltip.Root>
 									</div>
@@ -905,16 +927,21 @@
 														<Tooltip.Root>
 															<Tooltip.Trigger>
 																{#snippet child({ props })}
-																	<button {...props} class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100" type="button">
-																		<Info class="h-3.5 w-3.5" />
+																	<button
+																		{...props}
+																		onclick={(e) => {
+																			e.stopPropagation();
+																			openDetailsModal(field);
+																		}}
+																		class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100 p-1 -m-1"
+																		type="button"
+																	>
+																		<Maximize2 class="h-3.5 w-3.5" />
 																	</button>
 																{/snippet}
 															</Tooltip.Trigger>
 															<Tooltip.Content side="top">
-																<div class="flex flex-col gap-1">
-																	<span class="font-mono text-xs">API: {field.apiName}</span>
-																	<span class="text-xs">Created: {formatCreatedDate(field.metadata?.created_date)}</span>
-																</div>
+																<span class="text-xs">View details</span>
 															</Tooltip.Content>
 														</Tooltip.Root>
 													</div>
@@ -931,4 +958,11 @@
 		{/if}
 	</div>
 </div>
+
+<!-- Component Details Modal -->
+<ComponentDetailsModal
+	component={selectedComponentForDetails}
+	open={detailsModalOpen}
+	onOpenChange={handleModalOpenChange}
+/>
 
