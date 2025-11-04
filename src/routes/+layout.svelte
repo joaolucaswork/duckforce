@@ -26,9 +26,11 @@
 
 		// Safe to use onAuthStateChange on client-side
 		// The session is validated server-side via safeGetSession() in hooks.server.ts
+		// We only use newSession.expires_at for comparison, not for authentication
 		const {
 			data: { subscription }
 		} = supabase.auth.onAuthStateChange((_event, newSession) => {
+			// Only comparing expires_at timestamp - not using user object from session
 			if (newSession?.expires_at !== session?.expires_at) {
 				invalidate('supabase:auth');
 			}

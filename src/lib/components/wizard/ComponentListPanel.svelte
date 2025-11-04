@@ -8,7 +8,7 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import { Skeleton } from '$lib/components/ui/skeleton';
-	import { Search, Info, RefreshCw, Ellipsis, ChevronDown, ChevronRight } from '@lucide/svelte';
+	import { Search, Info, RefreshCw, Ellipsis, ChevronRight, Plus, Minus } from '@lucide/svelte';
 	import type { ComponentType, SalesforceComponent } from '$lib/types/salesforce';
 	import type { CachedOrganization } from '$lib/types/wizard';
 	import OrganizationCard from './OrganizationCard.svelte';
@@ -44,7 +44,7 @@
 	}: Props = $props();
 
 	let searchQuery = $state('');
-	let selectedTab = $state<ComponentType | 'all'>('all');
+	let selectedTab = $state<ComponentType | 'all' | 'customFields'>('all');
 	let showSystemComponents = $state(false);
 	let hideExistingComponents = $state(false); // Show components that exist in both orgs by default
 	let existingComponentsOpen = $state(false); // Collapsible state for existing components - collapsed by default
@@ -121,17 +121,71 @@
 
 	// Get custom fields for a specific custom object
 	function getCustomFieldsForObject(objectApiName: string): SalesforceComponent[] {
-		return components.filter(c => {
+		const fields = components.filter(c => {
 			if (c.type !== 'field') return false;
-			// Fields have metadata.tableenumorid that contains the parent object API name
-			const parentObject = c.metadata?.tableenumorid;
-			return parentObject === objectApiName;
+
+			// For custom objects, the field's apiName is in format: "ObjectName__c.FieldName__c"
+			// For standard objects, it's: "ObjectName.FieldName__c"
+			// So we can extract the object name from the apiName
+
+			const fieldApiName = c.apiName;
+			if (!fieldApiName) return false;
+
+			// Extract object name from field API name (everything before the first dot)
+			const dotIndex = fieldApiName.indexOf('.');
+			if (dotIndex === -1) return false;
+
+			const objectNameFromApiName = fieldApiName.substring(0, dotIndex);
+
+			// Match against the object API name
+			return objectNameFromApiName === objectApiName;
 		});
+
+		return fields;
 	}
 
 	// Check if a component is a custom object (not a standard object)
 	function isCustomObject(component: SalesforceComponent): boolean {
 		return component.type === 'object' && component.apiName.endsWith('__c');
+	}
+
+	// Capitalize first letter of a string
+	function capitalizeFirst(str: string): string {
+		return str.charAt(0).toUpperCase() + str.slice(1);
+	}
+
+	// Extract parent object name from a field component
+	// Uses the field's metadata.tableenumorid to find the parent object
+	function getParentObjectName(field: SalesforceComponent): string {
+		if (field.type !== 'field') return 'Unknown';
+
+		const tableEnumOrId = field.metadata?.tableenumorid;
+		if (!tableEnumOrId) return 'Unknown';
+
+		// Try to find the parent object by matching tableenumorid
+		// tableenumorid can be:
+		// 1. An object API name (e.g., "Lead", "Account", "MyObject__c")
+		// 2. A Salesforce ID (e.g., "01IHp000004lR8NMAU")
+
+		// First, try to find by API name match
+		let parentObject = components.find(c =>
+			c.type === 'object' && c.apiName === tableEnumOrId
+		);
+
+		// If not found and tableEnumOrId looks like an ID, search by component_id in metadata
+		if (!parentObject && tableEnumOrId.match(/^[0-9a-zA-Z]{15,18}$/)) {
+			// Try to find by checking if any object has this Salesforce ID in their metadata
+			parentObject = components.find(c =>
+				c.type === 'object' && c.metadata?.component_id === tableEnumOrId
+			);
+		}
+
+		if (parentObject) {
+			return parentObject.name;
+		}
+
+		// If still not found, return the tableenumorid itself (might be a standard object name)
+		return tableEnumOrId;
 	}
 
 	// Determine if a component is custom (user-created) or system (standard Salesforce)
@@ -194,7 +248,12 @@
 
 		// Filter by type
 		if (selectedTab !== 'all') {
-			filtered = filtered.filter(c => c.type === selectedTab);
+			if (selectedTab === 'customFields') {
+				// Show only custom fields (fields with __c in apiName)
+				filtered = filtered.filter(c => c.type === 'field' && c.apiName.includes('__c'));
+			} else {
+				filtered = filtered.filter(c => c.type === selectedTab);
+			}
 		}
 
 		// Filter by search query
@@ -223,7 +282,7 @@
 	// Memoize component counts
 	let componentCountsCache = $state<{
 		key: string;
-		result: Record<ComponentType | 'all', number>;
+		result: Record<ComponentType | 'all' | 'customFields', number>;
 	} | null>(null);
 
 	const componentCounts = $derived.by(() => {
@@ -244,7 +303,7 @@
 			componentsToCount = componentsToCount.filter(c => !c.existsInBoth);
 		}
 
-		const counts: Record<ComponentType | 'all', number> = {
+		const counts: Record<ComponentType | 'all' | 'customFields', number> = {
 			all: componentsToCount.length,
 			lwc: 0,
 			apex: 0,
@@ -252,11 +311,16 @@
 			field: 0,
 			trigger: 0,
 			visualforce: 0,
-			flow: 0
+			flow: 0,
+			customFields: 0
 		};
 
 		componentsToCount.forEach(c => {
 			counts[c.type]++;
+			// Count custom fields separately (fields ending with __c)
+			if (c.type === 'field' && c.apiName.includes('__c')) {
+				counts.customFields++;
+			}
 		});
 
 		return counts;
@@ -281,7 +345,12 @@
 
 		// Filter by type
 		if (selectedTab !== 'all') {
-			filtered = filtered.filter(c => c.type === selectedTab);
+			if (selectedTab === 'customFields') {
+				// Show only custom fields (fields with __c in apiName)
+				filtered = filtered.filter(c => c.type === 'field' && c.apiName.includes('__c'));
+			} else {
+				filtered = filtered.filter(c => c.type === selectedTab);
+			}
 		}
 
 		return filtered;
@@ -360,27 +429,47 @@
 			>
 				<Select.Trigger class="w-[180px] h-9">
 					{#if selectedTab === 'all'}
-						All
+						All ({componentCounts.all})
 					{:else if selectedTab === 'lwc'}
-						LWC
+						LWC ({componentCounts.lwc})
 					{:else if selectedTab === 'apex'}
-						Apex
+						Apex ({componentCounts.apex})
 					{:else if selectedTab === 'object'}
-						Object
+						Object ({componentCounts.object})
+					{:else if selectedTab === 'customFields'}
+						Custom Fields ({componentCounts.customFields})
+					{:else if selectedTab === 'trigger'}
+						Trigger ({componentCounts.trigger})
+					{:else if selectedTab === 'visualforce'}
+						Visualforce ({componentCounts.visualforce})
+					{:else if selectedTab === 'flow'}
+						Flow ({componentCounts.flow})
 					{/if}
 				</Select.Trigger>
 				<Select.Content>
 					<Select.Item value="all">
-						All
+						All ({componentCounts.all})
 					</Select.Item>
 					<Select.Item value="lwc">
-						LWC
+						LWC ({componentCounts.lwc})
 					</Select.Item>
 					<Select.Item value="apex">
-						Apex
+						Apex ({componentCounts.apex})
 					</Select.Item>
 					<Select.Item value="object">
-						Object
+						Object ({componentCounts.object})
+					</Select.Item>
+					<Select.Item value="customFields">
+						Custom Fields ({componentCounts.customFields})
+					</Select.Item>
+					<Select.Item value="trigger">
+						Trigger ({componentCounts.trigger})
+					</Select.Item>
+					<Select.Item value="visualforce">
+						Visualforce ({componentCounts.visualforce})
+					</Select.Item>
+					<Select.Item value="flow">
+						Flow ({componentCounts.flow})
 					</Select.Item>
 				</Select.Content>
 			</Select.Root>
@@ -515,48 +604,31 @@
 			<div class="flex-1 min-h-0 overflow-y-scroll scrollbar-white">
 				<!-- Accordion for components that exist in both orgs -->
 				{#if !hideExistingComponents && componentsExistingInBoth().length > 0}
-					<div class="mb-3">
+					<!-- Full-width wrapper with bottom border -->
+					<div class="mb-3 -mx-4 bg-muted/30 border-b">
 						<Collapsible.Root bind:open={existingComponentsOpen}>
 							<Collapsible.Trigger class="w-full">
-								<div class="flex items-center justify-between p-3 rounded-lg border bg-muted/50 hover:bg-muted transition-colors">
-									<div class="flex items-center gap-2">
-										<ChevronDown class="h-4 w-4 transition-transform {existingComponentsOpen ? 'rotate-180' : ''}" />
-										<span class="text-sm font-medium">
-											{componentsExistingInBoth().length} component{componentsExistingInBoth().length !== 1 ? 's' : ''} already exist{componentsExistingInBoth().length === 1 ? 's' : ''} in both organizations
+								<div class="flex items-center gap-2 p-2.5 bg-muted/30 transition-colors" style="padding-left: 2.5rem; padding-right: 1rem;">
+									<div class="flex-1 min-w-0 flex items-center justify-between gap-3">
+										<span class="text-sm font-medium opacity-70">
+											{componentsExistingInBoth().length} already in both orgs
 										</span>
+										<div class="flex items-center gap-1.5 flex-shrink-0">
+											{#if existingComponentsOpen}
+												<Minus class="h-4 w-4 opacity-70" />
+											{:else}
+												<Plus class="h-4 w-4 opacity-70" />
+											{/if}
+										</div>
 									</div>
-									<Badge
-										variant="outline"
-										class="text-xs"
-										style="background-color: {organization.color || '#6b7280'}20; color: {organization.color || '#6b7280'}; border-color: {organization.color || '#6b7280'}40;"
-									>
-										{existingComponentsOpen ? 'Collapse' : 'Expand'}
-									</Badge>
 								</div>
 							</Collapsible.Trigger>
 							<Collapsible.Content>
-								<div class="mt-2 space-y-2">
+								<div class="pb-3">
 									{#each componentsExistingInBoth() as component}
 										<div>
 											<!-- Main component item -->
-											<div class="group w-full flex items-start gap-2 p-2.5 rounded-lg border transition-colors {isSelected(component.id) ? 'bg-accent' : ''}">
-												<!-- Expand/collapse button for custom objects -->
-												{#if isCustomObject(component)}
-													<button
-														onclick={(e) => {
-															e.stopPropagation();
-															toggleObjectExpansion(component.apiName);
-														}}
-														class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-all mt-0.5"
-														type="button"
-														aria-label="Toggle fields"
-													>
-														<ChevronRight class="h-4 w-4 transition-transform {isObjectExpanded(component.apiName) ? 'rotate-90' : ''}" />
-													</button>
-												{:else}
-													<div class="w-4 flex-shrink-0"></div>
-												{/if}
-
+											<div class="group w-full flex items-start gap-2 p-2.5 border-b transition-colors {isSelected(component.id) ? 'bg-accent/30' : ''}" style="padding-left: 2.5rem; padding-right: 1rem;">
 												<button
 													onclick={() => {
 														// Prevent deselection of auto-selected components
@@ -593,28 +665,16 @@
 														{/if}
 													</button>
 													<div class="flex items-center gap-1.5 flex-shrink-0">
-														{#if component.existsInBoth}
-															<Tooltip.Root>
-																<Tooltip.Trigger>
-																	{#snippet child({ props })}
-																		<Badge
-																			{...props}
-																			variant="outline"
-																			class="text-xs"
-																			style="background-color: {organization.color || '#6b7280'}20; color: {organization.color || '#6b7280'}; border-color: {organization.color || '#6b7280'}40;"
-																		>
-																			EXISTS IN BOTH
-																		</Badge>
-																	{/snippet}
-																</Tooltip.Trigger>
-																<Tooltip.Content side="top">
-																	<p class="text-xs">This component already exists in the target organization</p>
-																</Tooltip.Content>
-															</Tooltip.Root>
+														<!-- Show parent object name for fields when in Custom Fields tab -->
+														{#if selectedTab === 'customFields' && component.type === 'field'}
+															<Badge variant="secondary" class="text-xs font-mono">
+																{getParentObjectName(component)}
+															</Badge>
+														{:else}
+															<Badge variant="outline" class="text-xs font-mono">
+																{capitalizeFirst(component.type)}
+															</Badge>
 														{/if}
-														<Badge variant="outline" class="text-xs font-mono">
-															{component.type.toUpperCase()}
-														</Badge>
 														<Tooltip.Root>
 															<Tooltip.Trigger>
 																{#snippet child({ props })}
@@ -638,9 +698,9 @@
 											{#if isCustomObject(component) && isObjectExpanded(component.apiName)}
 												{@const customFields = getCustomFieldsForObject(component.apiName)}
 												{#if customFields.length > 0}
-													<div class="ml-10 mt-2 space-y-1 border-l-2 border-muted pl-3">
+													<div class="ml-10 border-l-2 border-muted pl-3">
 														{#each customFields as field}
-															<div class="group w-full flex items-start gap-2 p-2 rounded-lg border border-dashed transition-colors {isSelected(field.id) ? 'bg-accent/50' : ''}">
+															<div class="group w-full flex items-start gap-2 p-2 border-b border-dashed transition-colors {isSelected(field.id) ? 'bg-accent/20' : ''}">
 																<button
 																	onclick={() => {
 																		// Prevent deselection of auto-selected components
@@ -677,7 +737,7 @@
 																	</button>
 																	<div class="flex items-center gap-1.5 flex-shrink-0">
 																		<Badge variant="outline" class="text-xs font-mono">
-																			FIELD
+																			Field
 																		</Badge>
 																		<Tooltip.Root>
 																			<Tooltip.Trigger>
@@ -710,11 +770,11 @@
 				{/if}
 
 				<!-- Main component list (components to migrate) -->
-				<div class="space-y-2">
+				<div class="-mx-4">
 					{#each componentsToMigrate() as component}
 						<div>
 							<!-- Main component item -->
-							<div class="group w-full flex items-start gap-2 p-2.5 rounded-lg border transition-colors {isSelected(component.id) ? 'bg-accent' : ''}">
+							<div class="group w-full flex items-start gap-2 p-2.5 px-4 border-b transition-colors {isSelected(component.id) ? 'bg-accent/30' : ''}">
 								<!-- Expand/collapse button for custom objects -->
 								{#if isCustomObject(component)}
 									<button
@@ -768,28 +828,16 @@
 										{/if}
 									</button>
 									<div class="flex items-center gap-1.5 flex-shrink-0">
-										{#if component.existsInBoth}
-											<Tooltip.Root>
-												<Tooltip.Trigger>
-													{#snippet child({ props })}
-														<Badge
-															{...props}
-															variant="outline"
-															class="text-xs"
-															style="background-color: {organization.color || '#6b7280'}20; color: {organization.color || '#6b7280'}; border-color: {organization.color || '#6b7280'}40;"
-														>
-															EXISTS IN BOTH
-														</Badge>
-													{/snippet}
-												</Tooltip.Trigger>
-												<Tooltip.Content side="top">
-													<p class="text-xs">This component already exists in the target organization</p>
-												</Tooltip.Content>
-											</Tooltip.Root>
+										<!-- Show parent object name for fields when in Custom Fields tab -->
+										{#if selectedTab === 'customFields' && component.type === 'field'}
+											<Badge variant="secondary" class="text-xs font-mono">
+												{getParentObjectName(component)}
+											</Badge>
+										{:else}
+											<Badge variant="outline" class="text-xs font-mono">
+												{capitalizeFirst(component.type)}
+											</Badge>
 										{/if}
-										<Badge variant="outline" class="text-xs font-mono">
-											{component.type.toUpperCase()}
-										</Badge>
 										<Tooltip.Root>
 											<Tooltip.Trigger>
 												{#snippet child({ props })}
@@ -813,9 +861,9 @@
 							{#if isCustomObject(component) && isObjectExpanded(component.apiName)}
 								{@const customFields = getCustomFieldsForObject(component.apiName)}
 								{#if customFields.length > 0}
-									<div class="ml-10 mt-2 space-y-1 border-l-2 border-muted pl-3">
+									<div class="ml-10 border-l-2 border-muted pl-3">
 										{#each customFields as field}
-											<div class="group w-full flex items-start gap-2 p-2 rounded-lg border border-dashed transition-colors {isSelected(field.id) ? 'bg-accent/50' : ''}">
+											<div class="group w-full flex items-start gap-2 p-2 border-b border-dashed transition-colors {isSelected(field.id) ? 'bg-accent/20' : ''}">
 												<button
 													onclick={() => {
 														// Prevent deselection of auto-selected components
@@ -852,7 +900,7 @@
 													</button>
 													<div class="flex items-center gap-1.5 flex-shrink-0">
 														<Badge variant="outline" class="text-xs font-mono">
-															FIELD
+															Field
 														</Badge>
 														<Tooltip.Root>
 															<Tooltip.Trigger>

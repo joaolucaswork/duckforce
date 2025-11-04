@@ -6,10 +6,10 @@
 	import * as Card from '$lib/components/ui/card';
 	import { Progress } from '$lib/components/ui/progress';
 	import {
-		Loader2,
-		CheckCircle2,
-		XCircle,
-		AlertCircle,
+		LoaderCircle,
+		CircleCheck,
+		CircleX,
+		CircleAlert,
 		Rocket,
 		ArrowRight
 	} from '@lucide/svelte';
@@ -141,7 +141,7 @@
 		<!-- Preparing -->
 		<div class="flex items-center justify-center py-12">
 			<div class="text-center space-y-4">
-				<Loader2 class="h-8 w-8 animate-spin mx-auto text-primary" />
+				<LoaderCircle class="h-8 w-8 animate-spin mx-auto text-primary" />
 				<div>
 					<p class="font-medium">Preparing Migration</p>
 					<p class="text-sm text-muted-foreground">Setting up deployment package...</p>
@@ -152,7 +152,7 @@
 	{:else if migrationStatus === 'migrating'}
 		<!-- Migrating -->
 		<Alert.Root>
-			<Loader2 class="h-4 w-4 animate-spin" />
+			<LoaderCircle class="h-4 w-4 animate-spin" />
 			<Alert.Title>Migration in Progress</Alert.Title>
 			<Alert.Description>
 				Please do not close this window. Migration is currently running...
@@ -177,20 +177,20 @@
 
 				{#if currentComponent}
 					<div class="flex items-center gap-2 text-sm">
-						<Loader2 class="h-4 w-4 animate-spin text-primary" />
+						<LoaderCircle class="h-4 w-4 animate-spin text-primary" />
 						<span>Migrating: <strong>{getCurrentComponentName()}</strong></span>
 					</div>
 				{/if}
 
 				<div class="grid grid-cols-2 gap-4 pt-4">
 					<div class="flex items-center gap-2">
-						<CheckCircle2 class="h-4 w-4 text-green-600" />
+						<CircleCheck class="h-4 w-4 text-green-600" />
 						<span class="text-sm">
 							<strong>{migratedComponents.length}</strong> succeeded
 						</span>
 					</div>
 					<div class="flex items-center gap-2">
-						<XCircle class="h-4 w-4 text-red-600" />
+						<CircleX class="h-4 w-4 text-red-600" />
 						<span class="text-sm">
 							<strong>{failedComponents.length}</strong> failed
 						</span>
@@ -202,7 +202,7 @@
 	{:else if migrationStatus === 'completed'}
 		<!-- Completed -->
 		<Alert.Root class="border-green-200 bg-green-50">
-			<CheckCircle2 class="h-4 w-4 text-green-600" />
+			<CircleCheck class="h-4 w-4 text-green-600" />
 			<Alert.Title class="text-green-900">Migration Completed!</Alert.Title>
 			<Alert.Description class="text-green-800">
 				Your components have been migrated to the target org.
@@ -259,7 +259,7 @@
 	{:else if migrationStatus === 'failed'}
 		<!-- Failed -->
 		<Alert.Root variant="destructive">
-			<AlertCircle class="h-4 w-4" />
+			<CircleAlert class="h-4 w-4" />
 			<Alert.Title>Migration Failed</Alert.Title>
 			<Alert.Description>{error || 'An unexpected error occurred'}</Alert.Description>
 		</Alert.Root>

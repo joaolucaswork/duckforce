@@ -5,7 +5,7 @@
 	import { Label } from '$lib/components/ui/label';
 	import * as Alert from '$lib/components/ui/alert';
 	import * as Card from '$lib/components/ui/card';
-	import { AlertCircle, Loader2 } from '@lucide/svelte';
+	import { CircleAlert, LoaderCircle } from '@lucide/svelte';
 	import Logo from '$lib/components/Logo.svelte';
 	import type { PageData } from './$types';
 
@@ -41,6 +41,8 @@
 				throw signInError;
 			}
 
+			// Only checking if session exists to confirm login success
+			// Actual user validation happens server-side via safeGetSession()
 			if (authData.session) {
 				// Invalidate auth to sync the session with the server
 				await invalidate('supabase:auth');
@@ -104,7 +106,7 @@
 				<form onsubmit={handleLogin} class="space-y-4">
 					{#if error}
 						<Alert.Root variant="destructive">
-							<AlertCircle class="h-4 w-4" />
+							<CircleAlert class="h-4 w-4" />
 							<Alert.Description>{error}</Alert.Description>
 						</Alert.Root>
 					{/if}
@@ -143,7 +145,7 @@
 
 					<Button type="submit" class="w-full" disabled={loading}>
 						{#if loading}
-							<Loader2 class="mr-2 h-4 w-4 animate-spin" />
+							<LoaderCircle class="mr-2 h-4 w-4 animate-spin" />
 							Signing in...
 						{:else}
 							Sign in

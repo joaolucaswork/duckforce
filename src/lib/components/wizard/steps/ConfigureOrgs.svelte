@@ -10,9 +10,9 @@
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import * as Tabs from '$lib/components/ui/tabs';
 	import {
-		AlertCircle,
-		Loader2,
-		MoreVertical,
+		CircleAlert,
+		LoaderCircle,
+		EllipsisVertical,
 		Info,
 		Building2,
 		Cloud,
@@ -539,7 +539,7 @@
 	<!-- Migration Notice -->
 	{#if sourceIsConnected && wizardStore.state.cachedOrgs.length === 0}
 		<Alert.Root variant="destructive">
-			<AlertCircle class="h-4 w-4" />
+			<CircleAlert class="h-4 w-4" />
 			<Alert.Title>Legacy Connection Detected</Alert.Title>
 			<Alert.Description>
 				Your organizations are connected using the old authentication model. Please disconnect and reconnect them to use the new features.
@@ -672,7 +672,7 @@
 					<DropdownMenu.Trigger>
 						{#snippet child({ props })}
 							<Button {...props} variant="ghost" size="icon" class="h-8 w-8 flex-shrink-0">
-								<MoreVertical class="h-4 w-4" />
+								<EllipsisVertical class="h-4 w-4" />
 								<span class="sr-only">Source options</span>
 							</Button>
 						{/snippet}
@@ -743,7 +743,7 @@
 									<DropdownMenu.Trigger>
 										{#snippet child({ props })}
 											<Button {...props} variant="ghost" size="icon" class="h-8 w-8 text-white hover:bg-white/10">
-												<MoreVertical class="h-4 w-4" />
+												<EllipsisVertical class="h-4 w-4" />
 												<span class="sr-only">More options</span>
 											</Button>
 										{/snippet}
@@ -784,7 +784,7 @@
 							disabled={sourceRefreshing}
 						>
 							{#if sourceRefreshing}
-								<Loader2 class="mr-2 h-4 w-4 animate-spin" />
+								<LoaderCircle class="mr-2 h-4 w-4 animate-spin" />
 								Refreshing...
 							{:else}
 								Refresh Components
@@ -911,7 +911,7 @@
 
 					{#if sourceError}
 						<Alert.Root variant="destructive">
-							<AlertCircle class="h-4 w-4" />
+							<CircleAlert class="h-4 w-4" />
 							<Alert.Title>Connection Failed</Alert.Title>
 							<Alert.Description>{sourceError}</Alert.Description>
 						</Alert.Root>
@@ -923,7 +923,7 @@
 						class="w-full"
 					>
 						{#if sourceIsConnecting}
-							<Loader2 class="mr-2 h-4 w-4 animate-spin" />
+							<LoaderCircle class="mr-2 h-4 w-4 animate-spin" />
 							Connecting...
 						{:else}
 							Connect Source Org
@@ -1017,7 +1017,7 @@
 					<DropdownMenu.Trigger>
 						{#snippet child({ props })}
 							<Button {...props} variant="ghost" size="icon" class="h-8 w-8 flex-shrink-0">
-								<MoreVertical class="h-4 w-4" />
+								<EllipsisVertical class="h-4 w-4" />
 								<span class="sr-only">Destination options</span>
 							</Button>
 						{/snippet}
@@ -1088,7 +1088,7 @@
 									<DropdownMenu.Trigger>
 										{#snippet child({ props })}
 											<Button {...props} variant="ghost" size="icon" class="h-8 w-8 text-white hover:bg-white/10">
-												<MoreVertical class="h-4 w-4" />
+												<EllipsisVertical class="h-4 w-4" />
 												<span class="sr-only">More options</span>
 											</Button>
 										{/snippet}
@@ -1129,7 +1129,7 @@
 							disabled={targetRefreshing}
 						>
 							{#if targetRefreshing}
-								<Loader2 class="mr-2 h-4 w-4 animate-spin" />
+								<LoaderCircle class="mr-2 h-4 w-4 animate-spin" />
 								Refreshing...
 							{:else}
 								Refresh Components
@@ -1256,7 +1256,7 @@
 
 					{#if targetError}
 						<Alert.Root variant="destructive">
-							<AlertCircle class="h-4 w-4" />
+							<CircleAlert class="h-4 w-4" />
 							<Alert.Title>Connection Failed</Alert.Title>
 							<Alert.Description>{targetError}</Alert.Description>
 						</Alert.Root>
@@ -1268,7 +1268,7 @@
 						class="w-full"
 					>
 						{#if targetIsConnecting}
-							<Loader2 class="mr-2 h-4 w-4 animate-spin" />
+							<LoaderCircle class="mr-2 h-4 w-4 animate-spin" />
 							Connecting...
 						{:else}
 							Connect Destination Org

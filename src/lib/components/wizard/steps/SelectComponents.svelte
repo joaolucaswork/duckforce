@@ -365,7 +365,10 @@
 				dependents: Array.isArray(comp.dependents) ? comp.dependents : [],
 				migrationStatus: 'pending' as const,
 				migrationDate: undefined,
-				metadata: comp.metadata || {}
+				metadata: {
+					...(comp.metadata || {}),
+					component_id: comp.component_id // Store Salesforce component_id in metadata
+				}
 			}));
 
 			console.log('[RefreshComponents] Fetched', updatedComponents.length, 'updated components from source org');
@@ -442,7 +445,10 @@
 				dependents: Array.isArray(comp.dependents) ? comp.dependents : [],
 				migrationStatus: 'pending' as const,
 				migrationDate: undefined,
-				metadata: comp.metadata || {}
+				metadata: {
+					...(comp.metadata || {}),
+					component_id: comp.component_id // Store Salesforce component_id in metadata
+				}
 			}));
 
 			console.log('[RefreshComponents] Fetched', updatedComponents.length, 'updated components from target org');

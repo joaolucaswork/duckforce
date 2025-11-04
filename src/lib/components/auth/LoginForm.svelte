@@ -5,7 +5,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import { Alert, AlertDescription } from '$lib/components/ui/alert';
-	import { AlertCircle, Loader2 } from '@lucide/svelte';
+	import { CircleAlert, LoaderCircle } from '@lucide/svelte';
 
 	let email = $state('');
 	let password = $state('');
@@ -65,7 +65,7 @@
 <form onsubmit={handleLogin} class="space-y-4">
 	{#if error}
 		<Alert variant="destructive">
-			<AlertCircle class="h-4 w-4" />
+			<CircleAlert class="h-4 w-4" />
 			<AlertDescription>{error}</AlertDescription>
 		</Alert>
 	{/if}
@@ -102,7 +102,7 @@
 
 	<Button type="submit" class="w-full" disabled={isLoading}>
 		{#if isLoading}
-			<Loader2 class="mr-2 h-4 w-4 animate-spin" />
+			<LoaderCircle class="mr-2 h-4 w-4 animate-spin" />
 			Signing in...
 		{:else}
 			Sign in
