@@ -23,6 +23,7 @@
 		onToggleComponent: (componentId: string) => void;
 		onSelectAll: (orgId: string) => void;
 		onDeselectAll: (orgId: string) => void;
+		onSelectBatch?: (componentIds: string[]) => void; // NEW: Batch selection for performance
 		isSelected: (componentId: string) => boolean;
 		onRefresh?: () => void | Promise<void>;
 		isRefreshing?: boolean;
@@ -38,6 +39,7 @@
 		onToggleComponent,
 		// onSelectAll, // Not used anymore - using onToggleComponent instead
 		// onDeselectAll, // Not used anymore - using onToggleComponent instead
+		onSelectBatch, // NEW: Batch selection for performance
 		isSelected,
 		onRefresh,
 		isRefreshing = false,
@@ -55,19 +57,57 @@
 	let selectedComponentForDetails = $state<SalesforceComponent | null>(null); // Track selected component for details modal
 
 	// Auto-select components that exist in both orgs when components change
+	// CRITICAL FIX: Process auto-selection in chunks to prevent UI blocking
 	$effect(() => {
 		const existsInBothComponents = components.filter(c => c.existsInBoth);
 		const newAutoSelectedIds = new Set(existsInBothComponents.map(c => c.id));
 
-		// Auto-select these components if they're not already selected
-		existsInBothComponents.forEach(component => {
-			if (!isSelected(component.id)) {
-				onToggleComponent(component.id);
-			}
-		});
-
+		// Store the new auto-selected IDs immediately for UI consistency
 		autoSelectedIds = newAutoSelectedIds;
+
+		// Defer auto-selection with chunking for better performance
+		setTimeout(() => {
+			// Batch collect IDs that need to be selected
+			const idsToSelect: string[] = [];
+
+			existsInBothComponents.forEach(component => {
+				if (!isSelected(component.id)) {
+					idsToSelect.push(component.id);
+				}
+			});
+
+			// Process selection in chunks to prevent blocking
+			if (idsToSelect.length > 0) {
+				const CHUNK_SIZE = 100;
+				let currentIndex = 0;
+
+				function selectChunk() {
+					const chunk = idsToSelect.slice(currentIndex, currentIndex + CHUNK_SIZE);
+					
+					if (chunk.length > 0) {
+						if (onSelectBatch) {
+							// Use batch selection for better performance
+							onSelectBatch(chunk);
+						} else {
+							// Fallback to individual selection
+							chunk.forEach(id => onToggleComponent(id));
+						}
+					}
+
+					currentIndex += CHUNK_SIZE;
+
+					// Continue if there are more to select
+					if (currentIndex < idsToSelect.length) {
+						setTimeout(selectChunk, 0);
+					}
+				}
+
+				selectChunk();
+			}
+		}, 200); // Increased delay to ensure UI renders first
 	});
+
+
 
 	// Format timestamp for display
 	function formatTimestamp(date: Date | null): string {
@@ -162,37 +202,46 @@
 	}
 
 	// Extract parent object name from a field component
-	// Uses the field's metadata.tableenumorid to find the parent object
+	// Uses the field's apiName to extract the object name
 	function getParentObjectName(field: SalesforceComponent): string {
 		if (field.type !== 'field') return 'Unknown';
 
-		const tableEnumOrId = field.metadata?.tableenumorid;
-		if (!tableEnumOrId) return 'Unknown';
+		// Field apiName format: "ObjectName__c.FieldName__c" or "ObjectName.FieldName__c"
+		const fieldApiName = field.apiName;
+		if (!fieldApiName) return 'Unknown';
 
-		// Try to find the parent object by matching tableenumorid
-		// tableenumorid can be:
-		// 1. An object API name (e.g., "Lead", "Account", "MyObject__c")
-		// 2. A Salesforce ID (e.g., "01IHp000004lR8NMAU")
+		// Extract object API name (everything before the first dot)
+		const dotIndex = fieldApiName.indexOf('.');
+		if (dotIndex === -1) return 'Unknown';
 
-		// First, try to find by API name match
-		let parentObject = components.find(c =>
-			c.type === 'object' && c.apiName === tableEnumOrId
-		);
+		const objectApiName = fieldApiName.substring(0, dotIndex);
 
-		// If not found and tableEnumOrId looks like an ID, search by component_id in metadata
-		if (!parentObject && tableEnumOrId.match(/^[0-9a-zA-Z]{15,18}$/)) {
-			// Try to find by checking if any object has this Salesforce ID in their metadata
-			parentObject = components.find(c =>
-				c.type === 'object' && c.metadata?.component_id === tableEnumOrId
-			);
+		// DEBUG: Compare fields from both lists
+		if (field.name === 'PrecoFormatado') {
+			console.log('🔍 DEBUG PrecoFormatado:', {
+				fieldName: field.name,
+				fieldApiName: field.apiName,
+				extractedObjectApiName: objectApiName,
+				existsInBoth: field.existsInBoth,
+				allObjectsInComponents: components.filter(c => c.type === 'object').map(c => ({
+					apiName: c.apiName,
+					name: c.name
+				}))
+			});
 		}
+
+		// Try to find the parent object by API name to get its display name
+		const parentObject = components.find(c =>
+			c.type === 'object' && c.apiName === objectApiName
+		);
 
 		if (parentObject) {
 			return parentObject.name;
 		}
 
-		// If still not found, return the tableenumorid itself (might be a standard object name)
-		return tableEnumOrId;
+		// If object not found in components array, return the API name itself
+		// This handles cases where the object might not be in the filtered list
+		return objectApiName;
 	}
 
 	// Determine if a component is custom (user-created) or system (standard Salesforce)
@@ -364,12 +413,37 @@
 	});
 
 	// Separate components that exist in both orgs from those that don't
-	const componentsExistingInBoth = $derived(() => {
-		return filteredComponents.filter(c => c.existsInBoth);
+	// PERFORMANCE: Simple derived without cache mutation
+	const componentsExistingInBoth = $derived.by(() => {
+		const existsInBoth = filteredComponents.filter(c => c.existsInBoth);
+
+		// DEBUG: Log a sample field from exists in both
+		const sampleField = existsInBoth.find(c => c.type === 'field' && c.name === 'PrecoFormatado');
+		if (sampleField) {
+			console.log('📋 SAMPLE from EXISTS IN BOTH:', {
+				name: sampleField.name,
+				apiName: sampleField.apiName,
+				role: role
+			});
+		}
+
+		return existsInBoth;
 	});
 
-	const componentsToMigrate = $derived(() => {
-		return filteredComponents.filter(c => !c.existsInBoth);
+	const componentsToMigrate = $derived.by(() => {
+		const toMigrate = filteredComponents.filter(c => !c.existsInBoth);
+
+		// DEBUG: Log a sample field from to migrate
+		const sampleField = toMigrate.find(c => c.type === 'field' && c.name === 'PrecoFormatado');
+		if (sampleField) {
+			console.log('📋 SAMPLE from TO MIGRATE:', {
+				name: sampleField.name,
+				apiName: sampleField.apiName,
+				role: role
+			});
+		}
+
+		return toMigrate;
 	});
 
 	// Get selectable components (now includes components that exist in both orgs)
@@ -378,23 +452,26 @@
 	});
 
 	// Count selected components in current tab (includes all components)
-	const currentTabSelectedCount = $derived(() => {
-		return selectableTabComponents().filter(c => selectedIds.has(c.id)).length;
+	// PERFORMANCE: Simple derived without cache mutation
+	const currentTabSelectedCount = $derived.by(() => {
+		const selectable = selectableTabComponents();
+		return selectable.filter(c => selectedIds.has(c.id)).length;
 	});
 
 	// Count selected components in current filter (respects both type filter and search, only selectable)
-	const currentFilterSelectedCount = $derived(() => {
+	// PERFORMANCE: Simple derived without cache mutation
+	const currentFilterSelectedCount = $derived.by(() => {
 		return filteredComponents.filter(c => !c.existsInBoth && selectedIds.has(c.id)).length;
 	});
 
 	// Calculate checkbox state for select all (based on current tab, only selectable components)
 	const allSelected = $derived(() => {
 		const selectable = selectableTabComponents();
-		return selectable.length > 0 && currentTabSelectedCount() === selectable.length;
+		return selectable.length > 0 && currentTabSelectedCount === selectable.length;
 	});
 
 	const someSelected = $derived(() => {
-		const count = currentTabSelectedCount();
+		const count = currentTabSelectedCount;
 		const total = selectableTabComponents().length;
 		return count > 0 && count < total;
 	});
@@ -540,7 +617,7 @@
 					class="mt-0.5"
 				/>
 				<span class="text-xs text-muted-foreground mt-0.5">
-					{currentFilterSelectedCount()} of {filteredComponents.length} selected
+					{currentFilterSelectedCount} of {filteredComponents.length} selected
 				</span>
 			</button>
 
@@ -610,7 +687,7 @@
 			<!-- Scrollable container for both accordion and main list -->
 			<div class="flex-1 min-h-0 overflow-y-scroll scrollbar-white">
 				<!-- Accordion for components that exist in both orgs -->
-				{#if !hideExistingComponents && componentsExistingInBoth().length > 0}
+				{#if !hideExistingComponents && componentsExistingInBoth.length > 0}
 					<!-- Full-width wrapper with bottom border -->
 					<div class="mb-3 -mx-4 bg-muted/30 border-b">
 						<Collapsible.Root bind:open={existingComponentsOpen}>
@@ -618,7 +695,7 @@
 								<div class="flex items-center gap-2 p-2.5 bg-muted/30 transition-colors" style="padding-left: 2.5rem; padding-right: 1rem;">
 									<div class="flex-1 min-w-0 flex items-center justify-between gap-3">
 										<span class="text-sm font-medium opacity-70">
-											{componentsExistingInBoth().length} already in both orgs
+											{componentsExistingInBoth.length} already in both orgs
 										</span>
 										<div class="flex items-center gap-1.5 flex-shrink-0">
 											{#if existingComponentsOpen}
@@ -632,7 +709,7 @@
 							</Collapsible.Trigger>
 							<Collapsible.Content>
 								<div class="pb-3">
-									{#each componentsExistingInBoth() as component}
+									{#each componentsExistingInBoth as component}
 										<div>
 											<!-- Main component item -->
 											<div class="group w-full flex items-start gap-2 p-2.5 border-b transition-colors {isSelected(component.id) ? 'bg-accent/30' : ''}" style="padding-left: 2.5rem; padding-right: 1rem;">
@@ -788,7 +865,7 @@
 
 				<!-- Main component list (components to migrate) -->
 				<div class="-mx-4">
-					{#each componentsToMigrate() as component}
+					{#each componentsToMigrate as component}
 						<div>
 							<!-- Main component item -->
 							<div class="group w-full flex items-start gap-2 p-2.5 px-4 border-b transition-colors {isSelected(component.id) ? 'bg-accent/30' : ''}">
@@ -965,4 +1042,3 @@
 	open={detailsModalOpen}
 	onOpenChange={handleModalOpenChange}
 />
-

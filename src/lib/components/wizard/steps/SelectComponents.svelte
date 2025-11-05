@@ -2,7 +2,7 @@
 	import { wizardStore } from '$lib/stores/wizard.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Alert from '$lib/components/ui/alert';
-	import { LoaderCircle, TriangleAlert, RefreshCw, X } from '@lucide/svelte';
+	import { LoaderCircle, TriangleAlert, RefreshCw, X, Columns2, Rows3 } from '@lucide/svelte';
 	import type { SalesforceComponent } from '$lib/types/salesforce';
 	import { onMount } from 'svelte';
 	import ComponentListPanel from '$lib/components/wizard/ComponentListPanel.svelte';
@@ -12,10 +12,12 @@
 	// import { Checkbox } from '$lib/components/ui/checkbox';
 	// import * as Tabs from '$lib/components/ui/tabs';
 	// import * as Tooltip from '$lib/components/ui/tooltip';
-	// import { LayoutGrid, Columns2, Info } from '@lucide/svelte';
+	// import { LayoutGrid, Info } from '@lucide/svelte';
 	// import type { ComponentType } from '$lib/types/salesforce';
 	// import VirtualList from '$lib/components/ui/VirtualList.svelte';
 
+	// Skeleton loading pattern: Single boolean for initial load state
+	let isInitialLoad = $state(true);
 	let errorMessage = $state<string | null>(null);
 	let lastLoadedSourceOrgId = $state<string | null>(null);
 	let lastLoadedTargetOrgId = $state<string | null>(null);
@@ -24,11 +26,11 @@
 	let targetRefreshing = $state(false);
 	let lastUpdatedSource = $state<Date | null>(null);
 	let lastUpdatedTarget = $state<Date | null>(null);
+	// Guard flag to prevent infinite loop in $effect
+	let isFetching = $state(false);
 
-	// COMMENTED OUT: Unused state variables for unified view
-	// let searchQuery = $state('');
-	// let selectedTab = $state<ComponentType | 'all'>('all');
-	// let viewMode = $state<'unified' | 'side-by-side'>('side-by-side');
+	// View mode state: 'side-by-side' or 'stacked'
+	let viewMode = $state<'side-by-side' | 'stacked'>('side-by-side');
 
 	const isLoading = $derived(wizardStore.state.componentSelection.isLoading);
 	const availableComponents = $derived(wizardStore.state.componentSelection.availableComponents);
@@ -55,7 +57,13 @@
 	);
 
 	// Create a map of target components for quick lookup by apiName and type
-	const targetComponentsMap = $derived(() => {
+	// PERFORMANCE: Use lazy evaluation - only compute when actually needed
+	const targetComponentsMap = $derived.by(() => {
+		// Early return if no target components
+		if (targetComponents().length === 0) {
+			return new Map<string, SalesforceComponent>();
+		}
+
 		const map = new Map<string, SalesforceComponent>();
 		targetComponents().forEach(comp => {
 			const key = `${comp.apiName}|${comp.type}`;
@@ -65,33 +73,111 @@
 	});
 
 	// Mark source components that exist in both orgs
-	const sourceComponentsWithExistsFlag = $derived(() => {
-		return sourceComponents().map(comp => {
-			const key = `${comp.apiName}|${comp.type}`;
-			const existsInTarget = targetComponentsMap().has(key);
-			return {
-				...comp,
-				existsInBoth: existsInTarget
-			};
-		});
+	// PERFORMANCE: Defer this computation to avoid blocking on initial render
+	let sourceComponentsWithExistsFlag = $state<Array<SalesforceComponent & { existsInBoth: boolean }>>([]);
+	let targetComponentsWithExistsFlag = $state<Array<SalesforceComponent & { existsInBoth: boolean }>>([]);
+	let isProcessingSourceComponents = $state(false);
+	let isProcessingTargetComponents = $state(false);
+
+	// CRITICAL: Process components in chunks to prevent UI blocking
+	// Use $effect to compute existsInBoth flags asynchronously in chunks
+	$effect(() => {
+		const sourceComps = sourceComponents();
+		const targetMap = targetComponentsMap;
+
+		// Start with empty array - skeleton will show
+		sourceComponentsWithExistsFlag = [];
+		isProcessingSourceComponents = true;
+
+		// Process in chunks of 100 components at a time (increased from 50)
+		const CHUNK_SIZE = 100;
+		let currentIndex = 0;
+
+		function processChunk() {
+			const chunk = sourceComps.slice(currentIndex, currentIndex + CHUNK_SIZE);
+			
+			const processedChunk = chunk.map(comp => {
+				const key = `${comp.apiName}|${comp.type}`;
+				const existsInTarget = targetMap.has(key);
+				return {
+					...comp,
+					existsInBoth: existsInTarget
+				};
+			});
+
+			// Append processed chunk to results
+			sourceComponentsWithExistsFlag = [...sourceComponentsWithExistsFlag, ...processedChunk];
+
+			currentIndex += CHUNK_SIZE;
+
+			// Continue processing if there are more components
+			if (currentIndex < sourceComps.length) {
+				// Use setTimeout with 0 delay to yield to browser
+				setTimeout(processChunk, 0);
+			} else {
+				isProcessingSourceComponents = false;
+			}
+		}
+
+		// Start processing immediately (no delay) but in chunks
+		if (sourceComps.length > 0) {
+			setTimeout(processChunk, 0);
+		} else {
+			isProcessingSourceComponents = false;
+		}
 	});
 
-	// Mark target components that exist in both orgs
-	const targetComponentsWithExistsFlag = $derived(() => {
+	$effect(() => {
+		const targetComps = targetComponents();
+		const sourceComps = sourceComponents();
+
+		// Start with empty array - skeleton will show
+		targetComponentsWithExistsFlag = [];
+		isProcessingTargetComponents = true;
+
+		// Build source map first
 		const sourceMap = new Map<string, SalesforceComponent>();
-		sourceComponents().forEach(comp => {
+		sourceComps.forEach(comp => {
 			const key = `${comp.apiName}|${comp.type}`;
 			sourceMap.set(key, comp);
 		});
 
-		return targetComponents().map(comp => {
-			const key = `${comp.apiName}|${comp.type}`;
-			const existsInSource = sourceMap.has(key);
-			return {
-				...comp,
-				existsInBoth: existsInSource
-			};
-		});
+		// Process in chunks of 100 components at a time (increased from 50)
+		const CHUNK_SIZE = 100;
+		let currentIndex = 0;
+
+		function processChunk() {
+			const chunk = targetComps.slice(currentIndex, currentIndex + CHUNK_SIZE);
+			
+			const processedChunk = chunk.map(comp => {
+				const key = `${comp.apiName}|${comp.type}`;
+				const existsInSource = sourceMap.has(key);
+				return {
+					...comp,
+					existsInBoth: existsInSource
+				};
+			});
+
+			// Append processed chunk to results
+			targetComponentsWithExistsFlag = [...targetComponentsWithExistsFlag, ...processedChunk];
+
+			currentIndex += CHUNK_SIZE;
+
+			// Continue processing if there are more components
+			if (currentIndex < targetComps.length) {
+				// Use setTimeout with 0 delay to yield to browser
+				setTimeout(processChunk, 0);
+			} else {
+				isProcessingTargetComponents = false;
+			}
+		}
+
+		// Start processing immediately (no delay) but in chunks
+		if (targetComps.length > 0) {
+			setTimeout(processChunk, 0);
+		} else {
+			isProcessingTargetComponents = false;
+		}
 	});
 
 	// COMMENTED OUT: Memoization and filtering for unified view
@@ -183,12 +269,36 @@
 	*/
 
 	/**
+	 * Fetch with timeout to prevent indefinite hangs
+	 */
+	async function fetchWithTimeout(url: string, timeoutMs: number = 30000, options?: RequestInit): Promise<Response> {
+		const controller = new AbortController();
+		const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+		try {
+			const response = await fetch(url, {
+				...options,
+				signal: controller.signal
+			});
+			clearTimeout(timeoutId);
+			return response;
+		} catch (error) {
+			clearTimeout(timeoutId);
+			if (error instanceof Error && error.name === 'AbortError') {
+				throw new Error(`Request timed out after ${timeoutMs / 1000} seconds`);
+			}
+			throw error;
+		}
+	}
+
+	/**
 	 * Fetch components from both source and target organizations
 	 */
 	async function fetchComponents(updateTimestamps: boolean = true) {
-		console.log('[fetchComponents] Starting...');
-		console.log('[fetchComponents] selectedSourceOrgId:', selectedSourceOrgId);
-		console.log('[fetchComponents] selectedTargetOrgId:', selectedTargetOrgId);
+		// Prevent concurrent fetches (infinite loop protection)
+		if (isFetching) {
+			return;
+		}
 
 		// Check if at least source org is selected
 		if (!selectedSourceOrgId) {
@@ -198,13 +308,11 @@
 			return;
 		}
 
+		isFetching = true;
 		wizardStore.setComponentsLoading(true);
 		errorMessage = null;
 
 		try {
-			console.log('[fetchComponents] Looking for orgs in cachedOrgs...');
-			console.log('[fetchComponents] cachedOrgs:', wizardStore.state.cachedOrgs);
-
 			// Get the source org
 			const sourceOrg = wizardStore.state.cachedOrgs.find(
 				org => org.id === selectedSourceOrgId
@@ -219,17 +327,13 @@
 				? wizardStore.state.cachedOrgs.find(org => org.id === selectedTargetOrgId)
 				: null;
 
-			console.log('[fetchComponents] Found sourceOrg:', sourceOrg);
-			console.log('[fetchComponents] Found targetOrg:', targetOrg);
-
 			// Fetch components from both orgs in parallel
 			const fetchPromises = [];
 			const orgData: Array<{ orgId: string; orgName: string; components: SalesforceComponent[] }> = [];
 
 			// Fetch from source org
-			console.log('[fetchComponents] Fetching from source org:', sourceOrg.org_id);
 			fetchPromises.push(
-				fetch(`/api/orgs/${sourceOrg.org_id}/components`)
+				fetchWithTimeout(`/api/orgs/${sourceOrg.org_id}/components`)
 					.then(async (response) => {
 						if (!response.ok) {
 							const errorData = await response.json().catch(() => ({}));
@@ -254,15 +358,13 @@
 							orgName: sourceOrg.org_name,
 							components
 						});
-						console.log('[fetchComponents] Received', components.length, 'components from source org');
 					})
 			);
 
 			// Fetch from target org if selected
 			if (targetOrg) {
-				console.log('[fetchComponents] Fetching from target org:', targetOrg.org_id);
 				fetchPromises.push(
-					fetch(`/api/orgs/${targetOrg.org_id}/components`)
+					fetchWithTimeout(`/api/orgs/${targetOrg.org_id}/components`)
 						.then(async (response) => {
 							if (!response.ok) {
 								const errorData = await response.json().catch(() => ({}));
@@ -287,7 +389,6 @@
 								orgName: targetOrg.org_name,
 								components
 							});
-							console.log('[fetchComponents] Received', components.length, 'components from target org');
 						})
 				);
 			}
@@ -296,9 +397,7 @@
 			await Promise.all(fetchPromises);
 
 			// Set components from all orgs
-			console.log('[fetchComponents] Setting components from', orgData.length, 'org(s)');
 			wizardStore.setComponentsFromMultipleOrgs(orgData);
-			console.log('[fetchComponents] Components set successfully. Total count:', wizardStore.state.componentSelection.availableComponents.length);
 
 			// Update timestamps for both orgs (only on initial load, not on individual refresh)
 			if (updateTimestamps) {
@@ -311,6 +410,9 @@
 			wizardStore.setComponentsError(message);
 			errorMessage = message;
 			console.error('[fetchComponents] Error:', error);
+		} finally {
+			// CRITICAL: Always reset fetching flag to prevent infinite hang
+			isFetching = false;
 		}
 	}
 
@@ -331,22 +433,22 @@
 
 		try {
 			sourceRefreshing = true;
-			console.log('[RefreshComponents] Refreshing source components for org:', sourceOrg.org_id);
 
 			// Step 1: Sync the org to refresh components in the database
-			const syncResponse = await fetch(`/api/orgs/${sourceOrg.org_id}/sync?refreshComponents=true`, {
-				method: 'POST'
-			});
+			const syncResponse = await fetchWithTimeout(
+				`/api/orgs/${sourceOrg.org_id}/sync?refreshComponents=true`,
+				60000,
+				{ method: 'POST' }
+			);
 
 			if (!syncResponse.ok) {
 				throw new Error('Failed to refresh components');
 			}
 
-			const syncData = await syncResponse.json();
-			console.log('[RefreshComponents] Source components refreshed:', syncData);
+			await syncResponse.json();
 
 			// Step 2: Fetch the updated components for this org only
-			const componentsResponse = await fetch(`/api/orgs/${sourceOrg.org_id}/components`);
+			const componentsResponse = await fetchWithTimeout(`/api/orgs/${sourceOrg.org_id}/components`);
 
 			if (!componentsResponse.ok) {
 				const errorData = await componentsResponse.json().catch(() => ({}));
@@ -370,8 +472,6 @@
 					component_id: comp.component_id // Store Salesforce component_id in metadata
 				}
 			}));
-
-			console.log('[RefreshComponents] Fetched', updatedComponents.length, 'updated components from source org');
 
 			// Step 3: Update only the source org's components in the store
 			const currentComponents = wizardStore.state.componentSelection.availableComponents;
@@ -411,22 +511,22 @@
 
 		try {
 			targetRefreshing = true;
-			console.log('[RefreshComponents] Refreshing target components for org:', targetOrg.org_id);
 
 			// Step 1: Sync the org to refresh components in the database
-			const syncResponse = await fetch(`/api/orgs/${targetOrg.org_id}/sync?refreshComponents=true`, {
-				method: 'POST'
-			});
+			const syncResponse = await fetchWithTimeout(
+				`/api/orgs/${targetOrg.org_id}/sync?refreshComponents=true`,
+				60000,
+				{ method: 'POST' }
+			);
 
 			if (!syncResponse.ok) {
 				throw new Error('Failed to refresh components');
 			}
 
-			const syncData = await syncResponse.json();
-			console.log('[RefreshComponents] Target components refreshed:', syncData);
+			await syncResponse.json();
 
 			// Step 2: Fetch the updated components for this org only
-			const componentsResponse = await fetch(`/api/orgs/${targetOrg.org_id}/components`);
+			const componentsResponse = await fetchWithTimeout(`/api/orgs/${targetOrg.org_id}/components`);
 
 			if (!componentsResponse.ok) {
 				const errorData = await componentsResponse.json().catch(() => ({}));
@@ -451,8 +551,6 @@
 				}
 			}));
 
-			console.log('[RefreshComponents] Fetched', updatedComponents.length, 'updated components from target org');
-
 			// Step 3: Update only the target org's components in the store
 			const currentComponents = wizardStore.state.componentSelection.availableComponents;
 			const otherOrgComponents = currentComponents.filter(c => c.sourceOrgId !== targetOrg.id);
@@ -475,27 +573,24 @@
 	}
 
 	onMount(async () => {
-		console.log('[SelectComponents] onMount - Starting');
-		console.log('[SelectComponents] selectedSourceOrgId:', selectedSourceOrgId);
-		console.log('[SelectComponents] cachedOrgs count:', wizardStore.state.cachedOrgs.length);
-		console.log('[SelectComponents] cachedOrgs:', wizardStore.state.cachedOrgs);
-
-		// Ensure cached orgs are loaded before fetching components
-		if (wizardStore.state.cachedOrgs.length === 0) {
-			console.log('[SelectComponents] Loading cached orgs...');
-			try {
+		try {
+			// Ensure cached orgs are loaded before fetching components
+			if (wizardStore.state.cachedOrgs.length === 0) {
 				await wizardStore.loadCachedOrgs();
-				console.log('[SelectComponents] Cached orgs loaded:', wizardStore.state.cachedOrgs.length);
-			} catch (err) {
-				console.error('[SelectComponents] Failed to load cached organizations:', err);
-				errorMessage = 'Failed to load organizations. Please try again.';
-				return;
 			}
-		}
 
-		console.log('[SelectComponents] Calling fetchComponents...');
-		// Load components from source org
-		fetchComponents();
+			// CRITICAL: Await fetchComponents to prevent race condition with $effect
+			await fetchComponents();
+
+			// Small delay for smooth transition
+			await new Promise(resolve => setTimeout(resolve, 100));
+		} catch (err) {
+			console.error('[SelectComponents] Error in onMount:', err);
+			errorMessage = err instanceof Error ? err.message : 'Failed to load organizations. Please try again.';
+		} finally {
+			// CRITICAL: Set isInitialLoad to false at the very end (skeleton loading pattern)
+			isInitialLoad = false;
+		}
 	});
 
 	// Reactive effect: Reload components when returning to this step or when orgs change
@@ -505,9 +600,6 @@
 		const sourceOrgId = selectedSourceOrgId;
 		const targetOrgId = selectedTargetOrgId;
 
-		console.log('[SelectComponents] $effect triggered - step:', step, 'sourceOrgId:', sourceOrgId, 'targetOrgId:', targetOrgId);
-		console.log('[SelectComponents] Last loaded - source:', lastLoadedSourceOrgId, 'target:', lastLoadedTargetOrgId);
-
 		// Only reload if:
 		// 1. We're on the select-components step
 		// 2. We have a source org selected
@@ -516,7 +608,6 @@
 		const targetChanged = targetOrgId !== lastLoadedTargetOrgId;
 
 		if (step === 'select-components' && sourceOrgId && (sourceChanged || targetChanged)) {
-			console.log('[SelectComponents] $effect - Reloading components. Source changed:', sourceChanged, 'Target changed:', targetChanged);
 			lastLoadedSourceOrgId = sourceOrgId;
 			lastLoadedTargetOrgId = targetOrgId;
 			fetchComponents();
@@ -525,6 +616,10 @@
 
 	function handleToggleComponent(componentId: string) {
 		wizardStore.toggleComponentSelection(componentId);
+	}
+
+	function handleSelectBatch(componentIds: string[]) {
+		wizardStore.selectComponentsBatch(componentIds);
 	}
 
 	function handleSelectAllFromOrg(orgId: string) {
@@ -540,7 +635,7 @@
 	}
 </script>
 
-<div class="flex flex-col gap-6 flex-1 min-h-0">
+<div class="flex flex-col gap-6 flex-1 min-h-0 overflow-hidden">
 	<!-- Info Alert -->
 	{#if showBanner}
 		<Alert.Root class="relative flex-shrink-0">
@@ -575,74 +670,92 @@
 		</Alert.Root>
 	{/if}
 
-	{#if isLoading}
-		<!-- Loading State -->
-		<div class="flex items-center justify-center py-12">
+	{#if isInitialLoad}
+		<!-- Skeleton Loading State (Initial Load Only) -->
+		<div class="flex items-center justify-center py-12 animate-in fade-in duration-300">
+			<div class="text-center space-y-4">
+				<LoaderCircle class="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
+				<p class="text-sm text-muted-foreground">Loading components...</p>
+			</div>
+		</div>
+	{:else if isLoading}
+		<!-- Subsequent Loading State (After Initial Load) -->
+		<div class="flex items-center justify-center py-12 animate-in fade-in duration-300">
 			<div class="text-center space-y-4">
 				<LoaderCircle class="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
 				<p class="text-sm text-muted-foreground">Loading components...</p>
 			</div>
 		</div>
 	{:else if !errorMessage}
-		<!-- COMMENTED OUT: View Mode Toggle - Keeping only side-by-side view
-		{#if sourceComponents().length > 0 && targetComponents().length > 0}
-			<div class="flex items-center gap-2">
-				<Button
-					variant={viewMode === 'unified' ? 'default' : 'outline'}
-					size="sm"
-					onclick={() => viewMode = 'unified'}
-				>
-					<LayoutGrid class="h-4 w-4 mr-2" />
-					Unified
-				</Button>
-				<Button
-					variant={viewMode === 'side-by-side' ? 'default' : 'outline'}
-					size="sm"
-					onclick={() => viewMode = 'side-by-side'}
-				>
-					<Columns2 class="h-4 w-4 mr-2" />
-					Side-by-Side
-				</Button>
-			</div>
-		{/if}
-		-->
-
 		<!-- Component View -->
 		{#if sourceComponents().length > 0 && targetComponents().length > 0 && sourceOrg() && targetOrg()}
-			<!-- Side-by-Side View -->
-			<div class="grid grid-cols-2 gap-4 flex-1 min-h-0">
+			<!-- Control Bar -->
+			<div class="flex items-center justify-between gap-4 px-1 py-2 border-b bg-muted/30 flex-shrink-0">
+				<div class="flex items-center gap-2">
+					<span class="text-sm font-medium text-muted-foreground">View Mode:</span>
+					<div class="flex items-center gap-1 border rounded-md p-0.5 bg-background">
+						<Button
+							variant={viewMode === 'side-by-side' ? 'default' : 'ghost'}
+							size="sm"
+							onclick={() => viewMode = 'side-by-side'}
+							class="h-7 px-2"
+						>
+							<Columns2 class="h-3.5 w-3.5 mr-1.5" />
+							Side-by-Side
+						</Button>
+						<Button
+							variant={viewMode === 'stacked' ? 'default' : 'ghost'}
+							size="sm"
+							onclick={() => viewMode = 'stacked'}
+							class="h-7 px-2"
+						>
+							<Rows3 class="h-3.5 w-3.5 mr-1.5" />
+							Stacked
+						</Button>
+					</div>
+				</div>
+				<!-- Placeholder for future controls -->
+				<div class="flex items-center gap-2">
+					<!-- Future controls can be added here -->
+				</div>
+			</div>
+
+			<!-- Organization Panels -->
+			<div class="{viewMode === 'side-by-side' ? 'grid grid-cols-2 gap-4' : 'flex flex-col gap-4'} flex-1 min-h-0 {viewMode === 'stacked' ? 'overflow-y-auto' : 'overflow-hidden'} animate-in fade-in duration-300">
 				<!-- Source Org Panel -->
-				<div class="border rounded-lg p-4 flex flex-col min-h-0">
+				<div class="border rounded-lg p-4 flex flex-col {viewMode === 'stacked' ? 'flex-shrink-0' : 'min-h-0 overflow-hidden'}">
 					<ComponentListPanel
-						components={sourceComponentsWithExistsFlag()}
+						components={sourceComponentsWithExistsFlag}
 						selectedIds={selectedIds}
 						orgId={selectedSourceOrgId || ''}
 						organization={sourceOrg()!}
 						role="source"
 						onToggleComponent={handleToggleComponent}
+						onSelectBatch={handleSelectBatch}
 						onSelectAll={handleSelectAllFromOrg}
 						onDeselectAll={handleDeselectAllFromOrg}
 						isSelected={isSelected}
 						onRefresh={handleRefreshSourceComponents}
-						isRefreshing={sourceRefreshing}
+						isRefreshing={sourceRefreshing || isProcessingSourceComponents}
 						lastUpdated={lastUpdatedSource}
 					/>
 				</div>
 
 				<!-- Target Org Panel -->
-				<div class="border rounded-lg p-4 flex flex-col min-h-0">
+				<div class="border rounded-lg p-4 flex flex-col {viewMode === 'stacked' ? 'flex-shrink-0' : 'min-h-0 overflow-hidden'}">
 					<ComponentListPanel
-						components={targetComponentsWithExistsFlag()}
+						components={targetComponentsWithExistsFlag}
 						selectedIds={selectedIds}
 						orgId={selectedTargetOrgId || ''}
 						organization={targetOrg()!}
 						role="target"
 						onToggleComponent={handleToggleComponent}
+						onSelectBatch={handleSelectBatch}
 						onSelectAll={handleSelectAllFromOrg}
 						onDeselectAll={handleDeselectAllFromOrg}
 						isSelected={isSelected}
 						onRefresh={handleRefreshTargetComponents}
-						isRefreshing={targetRefreshing}
+						isRefreshing={targetRefreshing || isProcessingTargetComponents}
 						lastUpdated={lastUpdatedTarget}
 					/>
 				</div>

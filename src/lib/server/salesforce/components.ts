@@ -147,13 +147,33 @@ export async function fetchCustomObjects(conn: Connection): Promise<ComponentIns
 
 /**
  * Fetch all Custom Fields from a Salesforce org
- * 
+ *
  * @param conn - JSforce connection with valid access token
  * @returns Array of custom field components
  */
 export async function fetchCustomFields(conn: Connection): Promise<ComponentInsert[]> {
 	try {
 		console.log('[Salesforce] Fetching Custom Fields...');
+
+		// First, fetch all custom objects to build a map of ID -> API name
+		console.log('[Salesforce] Building object ID to API name map...');
+		const objectsResult = await conn.tooling.query(
+			`SELECT Id, DeveloperName, NamespacePrefix
+			 FROM CustomObject
+			 WHERE ManageableState IN ('unmanaged', 'installed')
+			 LIMIT 2000`
+		);
+
+		// Create map of object ID to API name
+		const objectIdToApiName = new Map<string, string>();
+		objectsResult.records.forEach((obj: any) => {
+			const apiName = obj.NamespacePrefix
+				? `${obj.NamespacePrefix}__${obj.DeveloperName}__c`
+				: `${obj.DeveloperName}__c`;
+			objectIdToApiName.set(obj.Id, apiName);
+		});
+
+		console.log(`[Salesforce] Built map with ${objectIdToApiName.size} custom objects`);
 
 		// Query custom fields using Tooling API
 		// Note: CustomField in Tooling API has very limited fields available
@@ -166,24 +186,40 @@ export async function fetchCustomFields(conn: Connection): Promise<ComponentInse
 			 LIMIT 2000`
 		);
 
-		const components: ComponentInsert[] = result.records.map((record: any) => ({
-			component_id: record.Id,
-			api_name: record.NamespacePrefix
-				? `${record.TableEnumOrId}.${record.NamespacePrefix}__${record.DeveloperName}__c`
-				: `${record.TableEnumOrId}.${record.DeveloperName}__c`,
-			name: record.DeveloperName, // Use DeveloperName as display name
-			type: 'field' as const,
-			description: null,
-			namespace: record.NamespacePrefix || null,
-			metadata: {
-				developername: record.DeveloperName,
-				tableenumorid: record.TableEnumOrId,
-				created_date: record.CreatedDate,
-				last_modified_date: record.LastModifiedDate
-			},
-			dependencies: [],
-			dependents: []
-		}));
+		const components: ComponentInsert[] = result.records.map((record: any) => {
+			// Resolve TableEnumOrId to object API name
+			// TableEnumOrId can be either an object ID or an object API name
+			let objectApiName = record.TableEnumOrId;
+
+			// If it looks like an ID (15-18 alphanumeric chars), try to resolve it
+			if (record.TableEnumOrId.match(/^[0-9a-zA-Z]{15,18}$/)) {
+				const resolvedName = objectIdToApiName.get(record.TableEnumOrId);
+				if (resolvedName) {
+					objectApiName = resolvedName;
+				}
+				// If not found in map, it might be a standard object ID
+				// Keep the original TableEnumOrId as fallback
+			}
+
+			return {
+				component_id: record.Id,
+				api_name: record.NamespacePrefix
+					? `${objectApiName}.${record.NamespacePrefix}__${record.DeveloperName}__c`
+					: `${objectApiName}.${record.DeveloperName}__c`,
+				name: record.DeveloperName, // Use DeveloperName as display name
+				type: 'field' as const,
+				description: null,
+				namespace: record.NamespacePrefix || null,
+				metadata: {
+					developername: record.DeveloperName,
+					tableenumorid: record.TableEnumOrId,
+					created_date: record.CreatedDate,
+					last_modified_date: record.LastModifiedDate
+				},
+				dependencies: [],
+				dependents: []
+			};
+		});
 
 		console.log(`[Salesforce] Found ${components.length} Custom Fields`);
 		return components;
