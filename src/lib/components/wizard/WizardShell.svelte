@@ -192,7 +192,7 @@
 			{/if}
 
 			<!-- Main Content -->
-			<main class="flex-1 flex items-center relative min-h-0 overflow-hidden">
+			<main class="flex-1 relative min-h-0 overflow-hidden {wizardStore.state.currentStep === 'select-components' ? 'flex flex-col' : 'flex items-center'}">
 				<!-- Dot Grid Background Pattern -->
 				<svg class="absolute inset-0 h-full w-full pointer-events-none" xmlns="http://www.w3.org/2000/svg">
 					<defs>
@@ -203,7 +203,7 @@
 					<rect width="100%" height="100%" fill="url(#wizard-dot-grid)" />
 				</svg>
 
-				<div class="{wizardStore.state.currentStep === 'select-components' ? 'w-full h-full px-5' : 'max-w-4xl mx-auto px-8'} py-8 w-full relative z-10 {wizardStore.state.currentStep === 'select-components' ? 'flex flex-col' : ''}">
+				<div class="{wizardStore.state.currentStep === 'select-components' ? 'w-full px-5 flex flex-col' : 'max-w-4xl mx-auto px-8'} py-8 w-full relative z-10 {wizardStore.state.currentStep === 'select-components' ? 'min-h-0 flex-1' : ''}">
 					<!-- Step Header: Exibe o número do passo, título e descrição de forma centralizada -->
 					<!-- <div class="mb-10 text-center"> -->
 						<!-- Indicador numérico do passo atual (círculo com número) -->
