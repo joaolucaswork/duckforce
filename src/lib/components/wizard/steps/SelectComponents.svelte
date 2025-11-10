@@ -7,7 +7,7 @@
 	import { onMount } from 'svelte';
 	import ComponentListPanel from '$lib/components/wizard/ComponentListPanel.svelte';
 	import KanbanBoard from '$lib/components/wizard/KanbanBoard.svelte';
-	import AddItemsModal from '$lib/components/wizard/AddItemsModal.svelte';
+	import AddItemsSheet from '$lib/components/wizard/AddItemsSheet.svelte';
 
 	// COMMENTED OUT: Unused imports for unified view
 	// import { Badge } from '$lib/components/ui/badge';
@@ -753,8 +753,8 @@
 					/>
 				</div>
 
-				<!-- Add Items Modal -->
-				<AddItemsModal
+				<!-- Add Items Sheet -->
+				<AddItemsSheet
 					open={addItemsModalOpen}
 					onOpenChange={(open) => { addItemsModalOpen = open; }}
 					availableComponents={availableComponents}

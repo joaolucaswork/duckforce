@@ -2,6 +2,7 @@
 	import type { SalesforceComponent } from '$lib/types/salesforce';
 	import type { KanbanState } from '$lib/types/wizard';
 	import KanbanCard from './KanbanCard.svelte';
+	import NoteSheet from './NoteSheet.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Plus } from '@lucide/svelte';
 
@@ -18,6 +19,8 @@
 	let draggedComponentId = $state<string | null>(null);
 	let draggedFromColumn = $state<string | null>(null);
 	let dragOverColumn = $state<string | null>(null);
+	let noteSheetOpen = $state(false);
+	let selectedComponentForNote = $state<string | null>(null);
 
 	const columnTitles = {
 		'nao-iniciado': 'Não Iniciado',
@@ -63,9 +66,25 @@
 	function getComponentNote(id: string): string | undefined {
 		return kanbanState.componentNotes.get(id);
 	}
+
+	function handleOpenNoteSheet(componentId: string) {
+		selectedComponentForNote = componentId;
+		noteSheetOpen = true;
+	}
+
+	function handleSaveNote(note: string) {
+		if (selectedComponentForNote) {
+			onUpdateNote(selectedComponentForNote, note);
+		}
+	}
+
+	const selectedComponent = $derived(() => {
+		if (!selectedComponentForNote) return null;
+		return getComponentById(selectedComponentForNote);
+	});
 </script>
 
-<div class="grid grid-cols-3 gap-4 h-full overflow-hidden">
+<div class="grid grid-cols-3 gap-2 h-full overflow-hidden">
 	{#each kanbanState.columns as column (column.columnId)}
 		<div
 			role="region"
@@ -80,13 +99,13 @@
 			ondrop={(e) => handleDrop(e, column.columnId)}
 		>
 			<!-- Column Header -->
-			<div class="p-4 border-b border-border flex-shrink-0">
+			<div class="p-2.5 border-b border-border flex-shrink-0">
 				<div class="flex items-center justify-between">
-					<h3 class="font-semibold text-lg">
+					<h3 class="font-semibold text-base">
 						{columnTitles[column.columnId as keyof typeof columnTitles]}
 					</h3>
 					<span
-						class="px-2 py-1 text-xs font-medium bg-primary/10 text-primary rounded-full"
+						class="px-1.5 py-0.5 text-[10px] font-medium bg-primary/10 text-primary rounded-full"
 					>
 						{column.componentIds.length}
 					</span>
@@ -95,17 +114,17 @@
 					<Button
 						variant="outline"
 						size="sm"
-						class="mt-3 w-full"
+						class="mt-2 w-full h-7 text-xs"
 						onclick={onAddItems}
 					>
-						<Plus class="w-4 h-4 mr-2" />
+						<Plus class="w-3.5 h-3.5 mr-1.5" />
 						Adicionar Itens
 					</Button>
 				{/if}
 			</div>
 
 			<!-- Column Content -->
-			<div class="flex-1 overflow-y-scroll overflow-x-hidden scrollbar-white p-4 space-y-3 min-h-0">
+			<div class="flex-1 overflow-y-scroll overflow-x-hidden scrollbar-white p-2 space-y-1.5 min-h-0">
 				{#each column.componentIds as componentId (componentId)}
 					{@const component = getComponentById(componentId)}
 					{#if component}
@@ -121,7 +140,7 @@
 								{component}
 								note={getComponentNote(componentId)}
 								isDragging={draggedComponentId === componentId}
-								onUpdateNote={(note) => onUpdateNote(componentId, note)}
+								onOpenNoteSheet={() => handleOpenNoteSheet(componentId)}
 							/>
 						</div>
 					{/if}
@@ -136,3 +155,11 @@
 	{/each}
 </div>
 
+<!-- Note Sheet -->
+<NoteSheet
+	open={noteSheetOpen}
+	onOpenChange={(open) => { noteSheetOpen = open; }}
+	componentName={selectedComponent()?.name || ''}
+	note={selectedComponentForNote ? getComponentNote(selectedComponentForNote) : undefined}
+	onSaveNote={handleSaveNote}
+/>

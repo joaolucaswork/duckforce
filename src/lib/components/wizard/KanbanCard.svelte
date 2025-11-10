@@ -3,38 +3,16 @@
 	import * as Card from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
-	import { Textarea } from '$lib/components/ui/textarea';
-	import { GripVertical, MessageSquare, Save, X } from '@lucide/svelte';
+	import { GripVertical, MessageSquare } from '@lucide/svelte';
 
 	interface Props {
 		component: SalesforceComponent;
 		note: string | undefined;
 		isDragging: boolean;
-		onUpdateNote: (note: string) => void;
+		onOpenNoteSheet: () => void;
 	}
 
-	let { component, note, isDragging, onUpdateNote }: Props = $props();
-
-	let isEditingNote = $state(false);
-	let showNoteSection = $state(false);
-	let localNote = $state(note || '');
-
-	function handleSaveNote() {
-		onUpdateNote(localNote);
-		isEditingNote = false;
-	}
-
-	function handleCancelEdit() {
-		localNote = note || '';
-		isEditingNote = false;
-	}
-
-	function toggleNoteSection() {
-		showNoteSection = !showNoteSection;
-		if (showNoteSection && !isEditingNote && !note) {
-			isEditingNote = true;
-		}
-	}
+	let { component, note, isDragging, onOpenNoteSheet }: Props = $props();
 
 	const typeColors: Record<string, string> = {
 		ApexClass: 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
@@ -49,72 +27,43 @@
 	const typeColor = typeColors[component.type] || 'bg-gray-500/10 text-gray-700 dark:text-gray-400';
 </script>
 
-<Card.Root class="transition-all {isDragging ? 'opacity-50 cursor-grabbing' : 'cursor-grab hover:shadow-md'}">
-	<Card.Header class="pb-3">
-		<div class="flex items-start justify-between gap-2">
+<Card.Root class="transition-all py-3 gap-2 {isDragging ? 'opacity-50 cursor-grabbing' : 'cursor-grab hover:shadow-md'}">
+	<Card.Header class="pb-0 px-3 gap-0.5">
+		<div class="flex items-start justify-between gap-1.5">
 			<div class="flex-1 min-w-0">
-				<Badge class={typeColor} variant="secondary">
+				<Badge class="{typeColor} text-xs px-2 py-0.5" variant="secondary">
 					{component.type}
 				</Badge>
-				<h4 class="font-medium mt-2 truncate" title={component.name}>
+				<h4 class="font-medium text-sm mt-1.5 truncate overflow-hidden whitespace-nowrap text-ellipsis" title={component.name}>
 					{component.name}
 				</h4>
 			</div>
-			<GripVertical class="w-5 h-5 text-muted-foreground flex-shrink-0" />
+			<div class="flex items-center gap-1 flex-shrink-0">
+				<Button
+					variant="ghost"
+					size="icon-sm"
+					class="h-6 w-6 {note ? 'text-primary' : 'text-muted-foreground'}"
+					onclick={(e) => {
+						e.stopPropagation();
+						onOpenNoteSheet();
+					}}
+					title={note ? 'Ver/Editar Nota' : 'Adicionar Nota'}
+				>
+					<MessageSquare class="w-3.5 h-3.5" />
+				</Button>
+				<GripVertical class="w-4 h-4 text-muted-foreground" />
+			</div>
 		</div>
 	</Card.Header>
-	<Card.Content class="pb-3">
-		<p class="text-sm text-muted-foreground truncate" title={component.apiName}>
+	<Card.Content class="pb-3 px-3">
+		<p class="text-xs text-muted-foreground truncate overflow-hidden whitespace-nowrap text-ellipsis" title={component.apiName}>
 			{component.apiName}
 		</p>
 		{#if component.description}
-			<p class="text-xs text-muted-foreground mt-2 line-clamp-2">
+			<p class="text-xs text-muted-foreground mt-1.5 line-clamp-2">
 				{component.description}
 			</p>
 		{/if}
 	</Card.Content>
-	<Card.Footer class="pt-3 border-t flex-col items-stretch gap-2">
-		<Button
-			variant="ghost"
-			size="sm"
-			class="w-full justify-start"
-			onclick={toggleNoteSection}
-		>
-			<MessageSquare class="w-4 h-4 mr-2" />
-			{note ? 'Ver Nota' : 'Adicionar Nota'}
-			{#if note}
-				<Badge variant="secondary" class="ml-auto">1</Badge>
-			{/if}
-		</Button>
-
-		{#if showNoteSection}
-			<div class="mt-2 space-y-2">
-				{#if isEditingNote}
-					<Textarea
-						bind:value={localNote}
-						placeholder="Adicione uma nota..."
-						class="min-h-[80px] text-sm"
-					/>
-					<div class="flex gap-2">
-						<Button size="sm" onclick={handleSaveNote}>
-							<Save class="w-3 h-3 mr-1" />
-							Salvar
-						</Button>
-						<Button size="sm" variant="ghost" onclick={handleCancelEdit}>
-							<X class="w-3 h-3 mr-1" />
-							Cancelar
-						</Button>
-					</div>
-				{:else if note}
-					<div class="text-sm p-2 bg-muted rounded-md">
-						{note}
-					</div>
-					<Button size="sm" variant="outline" onclick={() => { isEditingNote = true; }}>
-						Editar Nota
-					</Button>
-				{/if}
-			</div>
-		{/if}
-	</Card.Footer>
 </Card.Root>
 
