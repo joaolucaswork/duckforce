@@ -1,11 +1,11 @@
 <script lang="ts">
 	import type { ComponentNoteData } from '$lib/types/wizard';
 	import * as Sheet from '$lib/components/ui/sheet';
-	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import * as Accordion from '$lib/components/ui/accordion';
+	import * as Tabs from '$lib/components/ui/tabs';
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
-	import { Save, X, EllipsisVertical, Plus, Pencil, Trash2 } from '@lucide/svelte';
+	import { Save, X, Plus, Pencil, Trash2, CheckSquare, FileText } from '@lucide/svelte';
 	import { formatDistanceToNow } from 'date-fns';
 	import { ptBR } from 'date-fns/locale';
 
@@ -26,9 +26,8 @@
 
 	let localContent = $state('');
 	let localIsTodo = $state(false);
+	let noteType = $state<'note' | 'todo'>('note');
 	let isTyping = $state(false);
-	let showThreeDotMenu = $state(false);
-	let dropdownOpen = $state(false);
 	let isSaving = $state(false);
 	let typingTimeout: ReturnType<typeof setTimeout> | null = null;
 	let autoSaveTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -60,11 +59,16 @@
 	$effect(() => {
 		localContent = noteData?.content || '';
 		localIsTodo = noteData?.isTodo || false;
+		noteType = noteData?.isTodo ? 'todo' : 'note';
 		lastSavedContent = noteData?.content || '';
 		lastSavedIsTodo = noteData?.isTodo || false;
 		isTyping = false;
-		showThreeDotMenu = false;
 		saveStatus = 'idle';
+	});
+
+	// Sync noteType with localIsTodo
+	$effect(() => {
+		localIsTodo = noteType === 'todo';
 	});
 
 	// Auto-save effect when content changes
@@ -104,18 +108,10 @@
 
 	function handleFocus() {
 		textareaFocused = true;
-		showThreeDotMenu = true;
 	}
 
 	function handleBlur() {
 		textareaFocused = false;
-		// Delay hiding menu to allow clicking on it
-		// Longer delay to ensure dropdown has time to open
-		setTimeout(() => {
-			if (!textareaFocused && !dropdownOpen) {
-				showThreeDotMenu = false;
-			}
-		}, 300);
 	}
 
 	async function handleAutoSave() {
@@ -284,7 +280,7 @@
 					oninput={handleInput}
 					onfocus={handleFocus}
 					onblur={handleBlur}
-					placeholder="Adicione uma nota sobre este componente..."
+					placeholder="Adicione uma nota ou to-do sobre este componente..."
 					class="min-h-[200px] resize-none"
 				/>
 
@@ -307,41 +303,51 @@
 						</div>
 					</div>
 				{/if}
-
-				<!-- Three-dot menu button -->
-				{#if showThreeDotMenu && !isTyping && localContent.trim()}
-					<div class="absolute top-2 right-2">
-						<DropdownMenu.Root bind:open={dropdownOpen}>
-							<DropdownMenu.Trigger>
-								{#snippet child({ props })}
-									<Button {...props} variant="ghost" size="icon" class="h-8 w-8">
-										<EllipsisVertical class="h-4 w-4" />
-									</Button>
-								{/snippet}
-							</DropdownMenu.Trigger>
-							<DropdownMenu.Content align="end">
-								<DropdownMenu.CheckboxItem
-									bind:checked={localIsTodo}
-								>
-									Converter para To-Do
-								</DropdownMenu.CheckboxItem>
-							</DropdownMenu.Content>
-						</DropdownMenu.Root>
-					</div>
-				{/if}
 			</div>
 
+			<!-- Tab-style Note Type Selector -->
+			<div class="mt-2 w-full">
+				<Tabs.Root bind:value={noteType}>
+					<Tabs.List class="grid w-full grid-cols-2">
+						<Tabs.Trigger value="note" class="flex items-center gap-2">
+							<FileText class="w-4 h-4" />
+							Nota
+						</Tabs.Trigger>
+						<Tabs.Trigger value="todo" class="flex items-center gap-2">
+							<CheckSquare class="w-4 h-4" />
+							To-Do
+						</Tabs.Trigger>
+					</Tabs.List>
+				</Tabs.Root>
+			</div>
+
+			<!-- Archive and Create New Button -->
+			{#if localContent.trim()}
+				<div class="mt-4">
+					<Button
+						variant="outline"
+						size="lg"
+						class="w-full"
+						onclick={handleArchiveAndCreateNew}
+						disabled={isSaving}
+					>
+						<Plus class="h-5 w-5 mr-2" />
+						Adicionar Nova Nota
+					</Button>
+				</div>
+			{/if}
+
 			<!-- Archived Notes (Collapsible Accordion) -->
-			{#if noteHistory.length > 0}
+			{#if noteHistory.filter(note => !note.isTodo).length > 0}
 				<div class="mt-4">
 					<Accordion.Root type="single" class="w-full">
 						<Accordion.Item value="archived-notes">
 							<Accordion.Trigger class="text-sm font-semibold">
-								Notas Arquivadas ({noteHistory.length})
+								Notas Arquivadas ({noteHistory.filter(note => !note.isTodo).length})
 							</Accordion.Trigger>
 							<Accordion.Content>
 								<div class="space-y-3 pt-2">
-									{#each noteHistory as historicalNote}
+									{#each noteHistory.filter(note => !note.isTodo) as historicalNote}
 										<div
 											class="p-4 rounded-lg border bg-muted/30 relative group"
 											role="article"
@@ -431,19 +437,99 @@
 				</div>
 			{/if}
 
-			<!-- Archive and Create New Button -->
-			{#if localContent.trim()}
+			<!-- To-Dos Arquivados (Collapsible Accordion) -->
+			{#if noteHistory.filter(note => note.isTodo).length > 0}
 				<div class="mt-4">
-					<Button
-						variant="outline"
-						size="lg"
-						class="w-full"
-						onclick={handleArchiveAndCreateNew}
-						disabled={isSaving}
-					>
-						<Plus class="h-5 w-5 mr-2" />
-						Adicionar Nova Nota
-					</Button>
+					<Accordion.Root type="single" class="w-full">
+						<Accordion.Item value="archived-todos">
+							<Accordion.Trigger class="text-sm font-semibold">
+								To-Dos Arquivados ({noteHistory.filter(note => note.isTodo).length})
+							</Accordion.Trigger>
+							<Accordion.Content>
+								<div class="space-y-3 pt-2">
+									{#each noteHistory.filter(note => note.isTodo) as historicalNote}
+										<div
+											class="p-4 rounded-lg border bg-muted/30 relative group"
+											role="article"
+											onmouseenter={() => hoveredNoteId = historicalNote.id}
+											onmouseleave={() => hoveredNoteId = null}
+										>
+											{#if editingNoteId === historicalNote.id}
+												<!-- Edit Mode -->
+												<div class="space-y-2">
+													<Textarea
+														bind:value={editingContent}
+														class="min-h-[100px] resize-none text-sm"
+													/>
+													<div class="flex items-center gap-2">
+														<label class="flex items-center gap-2 text-xs">
+															<input
+																type="checkbox"
+																bind:checked={editingIsTodo}
+																class="rounded"
+															/>
+															To-Do
+														</label>
+													</div>
+													<div class="flex gap-2 justify-end">
+														<Button
+															variant="outline"
+															size="sm"
+															onclick={cancelEditingNote}
+														>
+															Cancelar
+														</Button>
+														<Button
+															size="sm"
+															onclick={saveEditedNote}
+														>
+															Salvar
+														</Button>
+													</div>
+												</div>
+											{:else}
+												<!-- View Mode -->
+												<div class="flex items-start gap-2">
+													<CheckSquare class="w-4 h-4 mt-1 text-primary flex-shrink-0" />
+													<div class="flex-1 min-w-0">
+														<p class="text-sm whitespace-pre-wrap break-words">{historicalNote.content}</p>
+														<p class="text-xs text-muted-foreground mt-2">
+															{formatTimestamp(historicalNote.createdAt)}
+															{#if historicalNote.userName}
+																por {historicalNote.userName}
+															{:else}
+																por {historicalNote.userEmail}
+															{/if}
+														</p>
+													</div>
+												</div>
+												{#if hoveredNoteId === historicalNote.id}
+													<div class="absolute top-2 right-2 flex gap-1">
+														<Button
+															variant="ghost"
+															size="icon"
+															class="h-7 w-7"
+															onclick={() => startEditingNote(historicalNote)}
+														>
+															<Pencil class="h-3.5 w-3.5" />
+														</Button>
+														<Button
+															variant="ghost"
+															size="icon"
+															class="h-7 w-7 text-destructive hover:text-destructive"
+															onclick={() => deleteNote(historicalNote.id)}
+														>
+															<Trash2 class="h-3.5 w-3.5" />
+														</Button>
+													</div>
+												{/if}
+											{/if}
+										</div>
+									{/each}
+								</div>
+							</Accordion.Content>
+						</Accordion.Item>
+					</Accordion.Root>
 				</div>
 			{/if}
 

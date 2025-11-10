@@ -4,7 +4,7 @@
 	import * as Card from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
-	import { GripVertical, MessageSquare, SquareCheck } from '@lucide/svelte';
+	import { GripVertical, Maximize2, SquareCheck } from '@lucide/svelte';
 
 	interface Props {
 		component: SalesforceComponent;
@@ -49,9 +49,9 @@
 							e.stopPropagation();
 							onOpenNoteSheet();
 						}}
-						title={noteData ? (noteData.isTodo ? 'Ver/Editar To-Do' : 'Ver/Editar Nota') : 'Adicionar Nota'}
+						title={noteData ? 'Ver/Editar Notas e To-Dos' : 'Adicionar Nota ou To-Do'}
 					>
-						<MessageSquare class="w-3.5 h-3.5" />
+						<Maximize2 class="w-3.5 h-3.5" />
 					</Button>
 					{#if noteData?.isTodo}
 						<div class="absolute -top-0.5 -right-0.5">
