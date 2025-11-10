@@ -5,7 +5,7 @@
 	import * as Accordion from '$lib/components/ui/accordion';
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
-	import { Save, X, EllipsisVertical, Check, CircleAlert, Plus } from '@lucide/svelte';
+	import { Save, X, EllipsisVertical, Check, CircleAlert, Plus, Pencil, Trash2 } from '@lucide/svelte';
 	import { formatDistanceToNow } from 'date-fns';
 	import { ptBR } from 'date-fns/locale';
 
@@ -18,9 +18,11 @@
 		noteHistory: ComponentNoteData[];
 		onSaveNote: (content: string, isTodo: boolean, archiveAndCreateNew: boolean) => Promise<void>;
 		onLoadHistory: () => Promise<void>;
+		onDeleteNote?: (noteId: string) => Promise<void>;
+		onEditNote?: (noteId: string, content: string, isTodo: boolean) => Promise<void>;
 	}
 
-	let { open, onOpenChange, componentName, componentId, noteData, noteHistory, onSaveNote, onLoadHistory }: Props = $props();
+	let { open, onOpenChange, componentName, componentId, noteData, noteHistory, onSaveNote, onLoadHistory, onDeleteNote, onEditNote }: Props = $props();
 
 	let localContent = $state('');
 	let localIsTodo = $state(false);
@@ -34,6 +36,10 @@
 	let saveStatus = $state<'idle' | 'saving' | 'saved' | 'error'>('idle');
 	let lastSavedAt = $state<Date | null>(null);
 	let saveStatusTimeout: ReturnType<typeof setTimeout> | null = null;
+	let editingNoteId = $state<string | null>(null);
+	let editingContent = $state('');
+	let editingIsTodo = $state(false);
+	let hoveredNoteId = $state<string | null>(null);
 
 	let hasChanges = $derived(
 		localContent !== (noteData?.content || '') || localIsTodo !== (noteData?.isTodo || false)
@@ -209,6 +215,43 @@
 		const minutes = date.getMinutes().toString().padStart(2, '0');
 		return `${hours}:${minutes}`;
 	}
+
+	function startEditingNote(note: ComponentNoteData) {
+		editingNoteId = note.id;
+		editingContent = note.content;
+		editingIsTodo = note.isTodo;
+	}
+
+	function cancelEditingNote() {
+		editingNoteId = null;
+		editingContent = '';
+		editingIsTodo = false;
+	}
+
+	async function saveEditedNote() {
+		if (!editingNoteId || !onEditNote) return;
+
+		try {
+			await onEditNote(editingNoteId, editingContent, editingIsTodo);
+			editingNoteId = null;
+			editingContent = '';
+			editingIsTodo = false;
+			await onLoadHistory();
+		} catch (error) {
+			console.error('Error editing note:', error);
+		}
+	}
+
+	async function deleteNote(noteId: string) {
+		if (!onDeleteNote) return;
+
+		try {
+			await onDeleteNote(noteId);
+			await onLoadHistory();
+		} catch (error) {
+			console.error('Error deleting note:', error);
+		}
+	}
 </script>
 
 <Sheet.Root {open} onOpenChange={onOpenChange}>
@@ -293,23 +336,86 @@
 							<Accordion.Content>
 								<div class="space-y-3 pt-2">
 									{#each noteHistory as historicalNote}
-										<div class="p-4 rounded-lg border bg-muted/30">
-											<p class="text-sm whitespace-pre-wrap mb-2">{historicalNote.content}</p>
-											<div class="flex items-center justify-between text-xs text-muted-foreground">
-												<span>
-													{formatTimestamp(historicalNote.createdAt)}
-													{#if historicalNote.userName}
-														por {historicalNote.userName}
-													{:else}
-														por {historicalNote.userEmail}
-													{/if}
-												</span>
-												{#if historicalNote.isTodo}
-													<span class="px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 text-xs">
-														To-Do
+										<div
+											class="p-4 rounded-lg border bg-muted/30 relative group"
+											role="article"
+											onmouseenter={() => hoveredNoteId = historicalNote.id}
+											onmouseleave={() => hoveredNoteId = null}
+										>
+											{#if editingNoteId === historicalNote.id}
+												<!-- Edit Mode -->
+												<div class="space-y-2">
+													<Textarea
+														bind:value={editingContent}
+														class="min-h-[100px] resize-none text-sm"
+													/>
+													<div class="flex items-center gap-2">
+														<label class="flex items-center gap-2 text-xs">
+															<input
+																type="checkbox"
+																bind:checked={editingIsTodo}
+																class="rounded"
+															/>
+															To-Do
+														</label>
+													</div>
+													<div class="flex gap-2 justify-end">
+														<Button
+															variant="outline"
+															size="sm"
+															onclick={cancelEditingNote}
+														>
+															Cancelar
+														</Button>
+														<Button
+															size="sm"
+															onclick={saveEditedNote}
+														>
+															Salvar
+														</Button>
+													</div>
+												</div>
+											{:else}
+												<!-- View Mode -->
+												<p class="text-sm whitespace-pre-wrap mb-2">{historicalNote.content}</p>
+												<div class="flex items-center justify-between text-xs text-muted-foreground">
+													<span>
+														{formatTimestamp(historicalNote.createdAt)}
+														{#if historicalNote.userName}
+															por {historicalNote.userName}
+														{:else}
+															por {historicalNote.userEmail}
+														{/if}
 													</span>
+													{#if historicalNote.isTodo}
+														<span class="px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 text-xs">
+															To-Do
+														</span>
+													{/if}
+												</div>
+
+												<!-- Edit/Delete buttons (shown on hover) -->
+												{#if hoveredNoteId === historicalNote.id && onEditNote && onDeleteNote}
+													<div class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+														<Button
+															variant="ghost"
+															size="icon"
+															class="h-7 w-7"
+															onclick={() => startEditingNote(historicalNote)}
+														>
+															<Pencil class="h-3.5 w-3.5" />
+														</Button>
+														<Button
+															variant="ghost"
+															size="icon"
+															class="h-7 w-7 text-destructive hover:text-destructive"
+															onclick={() => deleteNote(historicalNote.id)}
+														>
+															<Trash2 class="h-3.5 w-3.5" />
+														</Button>
+													</div>
 												{/if}
-											</div>
+											{/if}
 										</div>
 									{/each}
 								</div>

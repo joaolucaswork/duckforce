@@ -16,6 +16,8 @@ import type { ComponentNoteResponse } from '$lib/server/db/types';
 
 class WizardStore {
 	state = $state<WizardState>(structuredClone(initialWizardState));
+	// Version counter to force reactivity when Maps change
+	noteHistoryVersion = $state(0);
 
 	// Navigation methods
 	goToStep(step: WizardStep) {
@@ -478,7 +480,7 @@ class WizardStore {
 	}
 
 	// Kanban board methods
-	addComponentToKanban(componentId: string, columnId: string) {
+	async addComponentToKanban(componentId: string, columnId: string) {
 		// Remove from other columns if already present
 		this.state.kanbanState.columns.forEach(column => {
 			const index = column.componentIds.indexOf(componentId);
@@ -492,9 +494,12 @@ class WizardStore {
 		if (targetColumn && !targetColumn.componentIds.includes(componentId)) {
 			targetColumn.componentIds.push(componentId);
 		}
+
+		// Save to database
+		await this.saveKanbanBoard();
 	}
 
-	moveComponentBetweenColumns(componentId: string, fromColumnId: string, toColumnId: string) {
+	async moveComponentBetweenColumns(componentId: string, fromColumnId: string, toColumnId: string) {
 		// Remove from source column
 		const fromColumn = this.state.kanbanState.columns.find(col => col.columnId === fromColumnId);
 		if (fromColumn) {
@@ -509,9 +514,12 @@ class WizardStore {
 		if (toColumn && !toColumn.componentIds.includes(componentId)) {
 			toColumn.componentIds.push(componentId);
 		}
+
+		// Save to database
+		await this.saveKanbanBoard();
 	}
 
-	removeComponentFromKanban(componentId: string) {
+	async removeComponentFromKanban(componentId: string) {
 		// Remove from all columns
 		this.state.kanbanState.columns.forEach(column => {
 			const index = column.componentIds.indexOf(componentId);
@@ -522,6 +530,9 @@ class WizardStore {
 
 		// Remove note if exists
 		this.state.kanbanState.componentNotes.delete(componentId);
+
+		// Save to database
+		await this.saveKanbanBoard();
 	}
 
 	updateComponentNote(componentId: string, noteData: ComponentNoteData) {
@@ -562,6 +573,52 @@ class WizardStore {
 		}
 	}
 
+	async loadKanbanBoard(): Promise<void> {
+		try {
+			const response = await fetch('/api/kanban');
+			if (!response.ok) {
+				throw new Error(`Failed to load kanban board: ${response.statusText}`);
+			}
+
+			const data = await response.json();
+
+			// Update kanban columns with loaded data
+			if (data.columns && Array.isArray(data.columns)) {
+				this.state.kanbanState.columns = data.columns;
+
+				// Extract all component IDs from all columns
+				const allComponentIds = data.columns.flatMap((col: any) => col.componentIds || []);
+
+				// Load notes for all components in the kanban board
+				if (allComponentIds.length > 0) {
+					await this.loadComponentNotes(allComponentIds);
+				}
+			}
+		} catch (error) {
+			console.error('Error loading kanban board:', error);
+		}
+	}
+
+	async saveKanbanBoard(): Promise<void> {
+		try {
+			const response = await fetch('/api/kanban', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({
+					columns: this.state.kanbanState.columns
+				})
+			});
+
+			if (!response.ok) {
+				throw new Error(`Failed to save kanban board: ${response.statusText}`);
+			}
+		} catch (error) {
+			console.error('Error saving kanban board:', error);
+		}
+	}
+
 	async loadComponentNoteWithHistory(componentId: string) {
 		try {
 			const response = await fetch(`/api/notes?componentId=${componentId}&includeHistory=true`);
@@ -598,6 +655,8 @@ class WizardStore {
 				userName: note.user_name
 			}));
 			this.state.kanbanState.componentNoteHistory.set(componentId, history);
+			// Increment version to trigger reactivity
+			this.noteHistoryVersion++;
 		} catch (error) {
 			console.error('Error loading component note history:', error);
 		}
@@ -657,18 +716,36 @@ class WizardStore {
 		this.state.kanbanState.componentNotes.delete(componentId);
 	}
 
-	addMultipleComponentsToKanban(componentIds: string[], columnId: string) {
+	async addMultipleComponentsToKanban(componentIds: string[], columnId: string) {
 		componentIds.forEach(id => {
-			this.addComponentToKanban(id, columnId);
+			// Remove from other columns if already present
+			this.state.kanbanState.columns.forEach(column => {
+				const index = column.componentIds.indexOf(id);
+				if (index > -1) {
+					column.componentIds.splice(index, 1);
+				}
+			});
+
+			// Add to the specified column
+			const targetColumn = this.state.kanbanState.columns.find(col => col.columnId === columnId);
+			if (targetColumn && !targetColumn.componentIds.includes(id)) {
+				targetColumn.componentIds.push(id);
+			}
 		});
+
+		// Save to database once after all additions
+		await this.saveKanbanBoard();
 	}
 
-	clearKanbanBoard() {
+	async clearKanbanBoard() {
 		this.state.kanbanState.columns.forEach(column => {
 			column.componentIds = [];
 		});
 		this.state.kanbanState.componentNotes.clear();
 		this.state.kanbanState.componentNoteHistory.clear();
+
+		// Save to database
+		await this.saveKanbanBoard();
 	}
 
 	// Reset wizard

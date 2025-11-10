@@ -304,3 +304,25 @@ export async function updateNote(
 
 	return data;
 }
+
+/**
+ * Delete a note by its ID
+ *
+ * @param userId - The user ID who owns this note
+ * @param noteId - The note ID to delete
+ */
+export async function deleteNoteById(
+	userId: string,
+	noteId: string
+): Promise<void> {
+	const { error } = await supabaseAdmin
+		.from('component_notes')
+		.delete()
+		.eq('id', noteId)
+		.eq('user_id', userId);
+
+	if (error) {
+		console.error('Error deleting note by ID:', error);
+		throw error;
+	}
+}

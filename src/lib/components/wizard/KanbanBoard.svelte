@@ -5,6 +5,7 @@
 	import NoteSheet from './NoteSheet.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Plus } from '@lucide/svelte';
+	import { wizardStore } from '$lib/stores/wizard.svelte';
 
 	interface Props {
 		components: SalesforceComponent[];
@@ -22,8 +23,6 @@
 	let dragOverColumn = $state<string | null>(null);
 	let noteSheetOpen = $state(false);
 	let selectedComponentForNote = $state<string | null>(null);
-	let isSavingNote = $state(false);
-	let saveError = $state<string | null>(null);
 
 	const columnTitles = {
 		'nao-iniciado': 'Não Iniciado',
@@ -70,38 +69,83 @@
 		return kanbanState.componentNotes.get(id);
 	}
 
-	function getComponentNoteHistory(id: string): ComponentNoteData[] {
-		return kanbanState.componentNoteHistory.get(id) || [];
-	}
+	// Make noteHistory reactive by depending on the version counter
+	const currentNoteHistory = $derived.by(() => {
+		// Access the version counter to create a dependency
+		wizardStore.noteHistoryVersion;
+		if (!selectedComponentForNote) return [];
+		return kanbanState.componentNoteHistory.get(selectedComponentForNote) || [];
+	});
 
 	function handleOpenNoteSheet(componentId: string) {
 		selectedComponentForNote = componentId;
 		noteSheetOpen = true;
-		saveError = null;
 	}
 
 	async function handleSaveNote(content: string, isTodo: boolean, archiveAndCreateNew: boolean) {
 		if (!selectedComponentForNote) return;
 
-		isSavingNote = true;
-		saveError = null;
-
 		try {
 			await onUpdateNote(selectedComponentForNote, content, isTodo, archiveAndCreateNew);
-			if (!archiveAndCreateNew) {
-				noteSheetOpen = false;
-			}
+			// Note: Sheet remains open after auto-save or manual save
+			// Only close when user explicitly clicks "Salvar Notas" button or "Cancelar"
 		} catch (error) {
-			saveError = error instanceof Error ? error.message : 'Failed to save note';
 			console.error('Error saving note:', error);
-		} finally {
-			isSavingNote = false;
 		}
 	}
 
 	async function handleLoadHistory() {
 		if (!selectedComponentForNote) return;
 		await onLoadNoteHistory(selectedComponentForNote);
+	}
+
+	async function handleDeleteNote(noteId: string) {
+		try {
+			const response = await fetch(`/api/notes?noteId=${noteId}`, {
+				method: 'DELETE'
+			});
+
+			if (!response.ok) {
+				throw new Error('Failed to delete note');
+			}
+
+			// Reload history after deletion
+			if (selectedComponentForNote) {
+				await onLoadNoteHistory(selectedComponentForNote);
+			}
+		} catch (error) {
+			console.error('Error deleting note:', error);
+			throw error;
+		}
+	}
+
+	async function handleEditNote(noteId: string, content: string, isTodo: boolean) {
+		try {
+			const response = await fetch('/api/notes', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({
+					componentId: selectedComponentForNote,
+					content,
+					isTodo,
+					noteId
+				})
+			});
+
+			if (!response.ok) {
+				throw new Error('Failed to edit note');
+			}
+
+			// Reload history after edit
+			if (selectedComponentForNote) {
+				await onLoadNoteHistory(selectedComponentForNote);
+			}
+		} catch (error) {
+			console.error('Error editing note:', error);
+			throw error;
+		}
 	}
 
 	const selectedComponent = $derived(() => {
@@ -188,7 +232,9 @@
 	componentName={selectedComponent()?.name || ''}
 	componentId={selectedComponentForNote || ''}
 	noteData={selectedComponentForNote ? getComponentNote(selectedComponentForNote) : undefined}
-	noteHistory={selectedComponentForNote ? getComponentNoteHistory(selectedComponentForNote) : []}
+	noteHistory={currentNoteHistory}
 	onSaveNote={handleSaveNote}
 	onLoadHistory={handleLoadHistory}
+	onDeleteNote={handleDeleteNote}
+	onEditNote={handleEditNote}
 />

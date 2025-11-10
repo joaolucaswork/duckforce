@@ -27,6 +27,11 @@ export type ComponentNote = Database['public']['Tables']['component_notes']['Row
 export type ComponentNoteInsert = Database['public']['Tables']['component_notes']['Insert'];
 export type ComponentNoteUpdate = Database['public']['Tables']['component_notes']['Update'];
 
+// Kanban boards types
+export type KanbanBoard = Database['public']['Tables']['kanban_boards']['Row'];
+export type KanbanBoardInsert = Database['public']['Tables']['kanban_boards']['Insert'];
+export type KanbanBoardUpdate = Database['public']['Tables']['kanban_boards']['Update'];
+
 // Extended types with relations
 export interface ActiveSessionWithOrg extends ActiveSession {
 	organization?: Organization | null;
@@ -71,5 +76,14 @@ export interface ComponentNoteResponse {
 	updated_at: string;
 	user_email: string;
 	user_name: string | null;
+}
+
+export interface KanbanBoardResponse {
+	id: string;
+	columns: Array<{
+		columnId: string;
+		componentIds: string[];
+	}>;
+	updated_at: string;
 }
 

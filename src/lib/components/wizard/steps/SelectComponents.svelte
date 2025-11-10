@@ -587,6 +587,9 @@
 			// CRITICAL: Await fetchComponents to prevent race condition with $effect
 			await fetchComponents();
 
+			// Load kanban board state and notes
+			await wizardStore.loadKanbanBoard();
+
 			// Small delay for smooth transition
 			await new Promise(resolve => setTimeout(resolve, 100));
 		} catch (err) {
@@ -619,13 +622,7 @@
 		}
 	});
 
-	// Load notes for components already in kanban when component mounts
-	onMount(async () => {
-		const componentIds = wizardStore.state.kanbanState.columns.flatMap(col => col.componentIds);
-		if (componentIds.length > 0) {
-			await wizardStore.loadComponentNotes(componentIds);
-		}
-	});
+
 
 	function handleToggleComponent(componentId: string) {
 		wizardStore.toggleComponentSelection(componentId);

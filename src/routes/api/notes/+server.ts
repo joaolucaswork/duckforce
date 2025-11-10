@@ -8,7 +8,8 @@ import {
 	getNoteHistory,
 	archiveNote,
 	createNewNote,
-	updateNote
+	updateNote,
+	deleteNoteById
 } from '$lib/server/db/notes';
 import { createServerSupabaseClient } from '$lib/server/supabase/auth';
 import type { ComponentNoteResponse } from '$lib/server/db/types';
@@ -202,12 +203,14 @@ export const POST: RequestHandler = async ({ locals, request, cookies }) => {
 
 /**
  * DELETE /api/notes?componentId=id
- * 
+ * DELETE /api/notes?noteId=id
+ *
  * Delete a component note
- * 
+ *
  * Query Parameters:
- * - componentId: The component ID to delete the note for
- * 
+ * - componentId: The component ID to delete the note for (deletes all notes for component)
+ * - noteId: The specific note ID to delete (deletes single note by ID)
+ *
  * Returns:
  * {
  *   success: true
@@ -221,11 +224,17 @@ export const DELETE: RequestHandler = async ({ locals, url }) => {
 
 	try {
 		const componentId = url.searchParams.get('componentId');
-		if (!componentId) {
-			throw error(400, 'componentId parameter is required');
+		const noteId = url.searchParams.get('noteId');
+
+		if (!componentId && !noteId) {
+			throw error(400, 'Either componentId or noteId parameter is required');
 		}
 
-		await deleteComponentNote(userId, componentId);
+		if (noteId) {
+			await deleteNoteById(userId, noteId);
+		} else if (componentId) {
+			await deleteComponentNote(userId, componentId);
+		}
 
 		return json({ success: true });
 	} catch (err) {
