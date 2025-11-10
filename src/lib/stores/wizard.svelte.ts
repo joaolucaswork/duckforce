@@ -475,6 +475,74 @@ class WizardStore {
 		this.state.migrationExecution.status = 'failed';
 	}
 
+	// Kanban board methods
+	addComponentToKanban(componentId: string, columnId: string) {
+		// Remove from other columns if already present
+		this.state.kanbanState.columns.forEach(column => {
+			const index = column.componentIds.indexOf(componentId);
+			if (index > -1) {
+				column.componentIds.splice(index, 1);
+			}
+		});
+
+		// Add to the specified column
+		const targetColumn = this.state.kanbanState.columns.find(col => col.columnId === columnId);
+		if (targetColumn && !targetColumn.componentIds.includes(componentId)) {
+			targetColumn.componentIds.push(componentId);
+		}
+	}
+
+	moveComponentBetweenColumns(componentId: string, fromColumnId: string, toColumnId: string) {
+		// Remove from source column
+		const fromColumn = this.state.kanbanState.columns.find(col => col.columnId === fromColumnId);
+		if (fromColumn) {
+			const index = fromColumn.componentIds.indexOf(componentId);
+			if (index > -1) {
+				fromColumn.componentIds.splice(index, 1);
+			}
+		}
+
+		// Add to target column
+		const toColumn = this.state.kanbanState.columns.find(col => col.columnId === toColumnId);
+		if (toColumn && !toColumn.componentIds.includes(componentId)) {
+			toColumn.componentIds.push(componentId);
+		}
+	}
+
+	removeComponentFromKanban(componentId: string) {
+		// Remove from all columns
+		this.state.kanbanState.columns.forEach(column => {
+			const index = column.componentIds.indexOf(componentId);
+			if (index > -1) {
+				column.componentIds.splice(index, 1);
+			}
+		});
+
+		// Remove note if exists
+		this.state.kanbanState.componentNotes.delete(componentId);
+	}
+
+	updateComponentNote(componentId: string, note: string) {
+		if (note.trim() === '') {
+			this.state.kanbanState.componentNotes.delete(componentId);
+		} else {
+			this.state.kanbanState.componentNotes.set(componentId, note);
+		}
+	}
+
+	addMultipleComponentsToKanban(componentIds: string[], columnId: string) {
+		componentIds.forEach(id => {
+			this.addComponentToKanban(id, columnId);
+		});
+	}
+
+	clearKanbanBoard() {
+		this.state.kanbanState.columns.forEach(column => {
+			column.componentIds = [];
+		});
+		this.state.kanbanState.componentNotes.clear();
+	}
+
 	// Reset wizard
 	reset() {
 		this.state = structuredClone(initialWizardState);

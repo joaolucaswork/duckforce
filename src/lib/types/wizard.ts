@@ -125,6 +125,16 @@ export interface MigrationExecution {
 	error: string | null;
 }
 
+export interface KanbanColumnData {
+	columnId: string;
+	componentIds: string[];
+}
+
+export interface KanbanState {
+	columns: KanbanColumnData[];
+	componentNotes: Map<string, string>;
+}
+
 export interface WizardState {
 	currentStep: WizardStep;
 	completedSteps: Set<WizardStep>;
@@ -150,6 +160,7 @@ export interface WizardState {
 	componentSelection: ComponentSelection;
 	dependencyReview: DependencyReview;
 	migrationExecution: MigrationExecution;
+	kanbanState: KanbanState;
 }
 
 export const initialWizardState: WizardState = {
@@ -200,6 +211,14 @@ export const initialWizardState: WizardState = {
 		migratedComponents: [],
 		failedComponents: [],
 		error: null
+	},
+	kanbanState: {
+		columns: [
+			{ columnId: 'nao-iniciado', componentIds: [] },
+			{ columnId: 'em-andamento', componentIds: [] },
+			{ columnId: 'concluido', componentIds: [] }
+		],
+		componentNotes: new Map()
 	}
 };
 

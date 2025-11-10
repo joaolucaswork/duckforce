@@ -2,10 +2,12 @@
 	import { wizardStore } from '$lib/stores/wizard.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Alert from '$lib/components/ui/alert';
-	import { LoaderCircle, TriangleAlert, RefreshCw, X, Columns2, Rows3 } from '@lucide/svelte';
+	import { LoaderCircle, TriangleAlert, RefreshCw, X, Columns2, Rows3, KanbanSquare } from '@lucide/svelte';
 	import type { SalesforceComponent } from '$lib/types/salesforce';
 	import { onMount } from 'svelte';
 	import ComponentListPanel from '$lib/components/wizard/ComponentListPanel.svelte';
+	import KanbanBoard from '$lib/components/wizard/KanbanBoard.svelte';
+	import AddItemsModal from '$lib/components/wizard/AddItemsModal.svelte';
 
 	// COMMENTED OUT: Unused imports for unified view
 	// import { Badge } from '$lib/components/ui/badge';
@@ -29,8 +31,11 @@
 	// Guard flag to prevent infinite loop in $effect
 	let isFetching = $state(false);
 
-	// View mode state: 'side-by-side' or 'stacked'
-	let viewMode = $state<'side-by-side' | 'stacked'>('side-by-side');
+	// View mode state: 'side-by-side', 'stacked', or 'to-do'
+	let viewMode = $state<'side-by-side' | 'stacked' | 'to-do'>('side-by-side');
+
+	// Add Items Modal state
+	let addItemsModalOpen = $state(false);
 
 	const isLoading = $derived(wizardStore.state.componentSelection.isLoading);
 	const availableComponents = $derived(wizardStore.state.componentSelection.availableComponents);
@@ -712,6 +717,15 @@
 							<Rows3 class="h-3.5 w-3.5 mr-1.5" />
 							Stacked
 						</Button>
+						<Button
+							variant={viewMode === 'to-do' ? 'default' : 'ghost'}
+							size="sm"
+							onclick={() => viewMode = 'to-do'}
+							class="h-7 px-2"
+						>
+							<KanbanSquare class="h-3.5 w-3.5 mr-1.5" />
+							To-Do Mode
+						</Button>
 					</div>
 				</div>
 				<!-- Placeholder for future controls -->
@@ -721,45 +735,77 @@
 			</div>
 
 			<!-- Organization Panels -->
-			<div class="{viewMode === 'side-by-side' ? 'grid grid-cols-2 gap-4' : 'flex flex-col gap-4'} flex-1 min-h-0 {viewMode === 'stacked' ? 'overflow-y-auto' : 'overflow-hidden'} animate-in fade-in duration-300">
-				<!-- Source Org Panel -->
-				<div class="border rounded-lg p-4 flex flex-col {viewMode === 'stacked' ? 'flex-shrink-0' : 'min-h-0 overflow-hidden'}">
-					<ComponentListPanel
-						components={sourceComponentsWithExistsFlag}
-						selectedIds={selectedIds}
-						orgId={selectedSourceOrgId || ''}
-						organization={sourceOrg()!}
-						role="source"
-						onToggleComponent={handleToggleComponent}
-						onSelectBatch={handleSelectBatch}
-						onSelectAll={handleSelectAllFromOrg}
-						onDeselectAll={handleDeselectAllFromOrg}
-						isSelected={isSelected}
-						onRefresh={handleRefreshSourceComponents}
-						isRefreshing={sourceRefreshing || isProcessingSourceComponents}
-						lastUpdated={lastUpdatedSource}
+			{#if viewMode === 'to-do'}
+				<!-- Kanban Board View -->
+				<div class="flex-1 min-h-0 overflow-hidden p-4 animate-in fade-in duration-300">
+					<KanbanBoard
+						components={availableComponents}
+						kanbanState={wizardStore.state.kanbanState}
+						onMoveComponent={(componentId, fromColumn, toColumn) => {
+							wizardStore.moveComponentBetweenColumns(componentId, fromColumn, toColumn);
+						}}
+						onUpdateNote={(componentId, note) => {
+							wizardStore.updateComponentNote(componentId, note);
+						}}
+						onAddItems={() => {
+							addItemsModalOpen = true;
+						}}
 					/>
 				</div>
 
-				<!-- Target Org Panel -->
-				<div class="border rounded-lg p-4 flex flex-col {viewMode === 'stacked' ? 'flex-shrink-0' : 'min-h-0 overflow-hidden'}">
-					<ComponentListPanel
-						components={targetComponentsWithExistsFlag}
-						selectedIds={selectedIds}
-						orgId={selectedTargetOrgId || ''}
-						organization={targetOrg()!}
-						role="target"
-						onToggleComponent={handleToggleComponent}
-						onSelectBatch={handleSelectBatch}
-						onSelectAll={handleSelectAllFromOrg}
-						onDeselectAll={handleDeselectAllFromOrg}
-						isSelected={isSelected}
-						onRefresh={handleRefreshTargetComponents}
-						isRefreshing={targetRefreshing || isProcessingTargetComponents}
-						lastUpdated={lastUpdatedTarget}
-					/>
+				<!-- Add Items Modal -->
+				<AddItemsModal
+					open={addItemsModalOpen}
+					onOpenChange={(open) => { addItemsModalOpen = open; }}
+					availableComponents={availableComponents}
+					alreadyInKanban={new Set(
+						wizardStore.state.kanbanState.columns.flatMap(col => col.componentIds)
+					)}
+					onAddComponents={(componentIds) => {
+						wizardStore.addMultipleComponentsToKanban(componentIds, 'nao-iniciado');
+					}}
+				/>
+			{:else}
+				<div class="{viewMode === 'side-by-side' ? 'grid grid-cols-2 gap-4' : 'flex flex-col gap-4'} flex-1 min-h-0 {viewMode === 'stacked' ? 'overflow-y-auto' : 'overflow-hidden'} animate-in fade-in duration-300">
+					<!-- Source Org Panel -->
+					<div class="border rounded-lg p-4 flex flex-col {viewMode === 'stacked' ? 'flex-shrink-0' : 'min-h-0 overflow-hidden'}">
+						<ComponentListPanel
+							components={sourceComponentsWithExistsFlag}
+							selectedIds={selectedIds}
+							orgId={selectedSourceOrgId || ''}
+							organization={sourceOrg()!}
+							role="source"
+							onToggleComponent={handleToggleComponent}
+							onSelectBatch={handleSelectBatch}
+							onSelectAll={handleSelectAllFromOrg}
+							onDeselectAll={handleDeselectAllFromOrg}
+							isSelected={isSelected}
+							onRefresh={handleRefreshSourceComponents}
+							isRefreshing={sourceRefreshing || isProcessingSourceComponents}
+							lastUpdated={lastUpdatedSource}
+						/>
+					</div>
+
+					<!-- Target Org Panel -->
+					<div class="border rounded-lg p-4 flex flex-col {viewMode === 'stacked' ? 'flex-shrink-0' : 'min-h-0 overflow-hidden'}">
+						<ComponentListPanel
+							components={targetComponentsWithExistsFlag}
+							selectedIds={selectedIds}
+							orgId={selectedTargetOrgId || ''}
+							organization={targetOrg()!}
+							role="target"
+							onToggleComponent={handleToggleComponent}
+							onSelectBatch={handleSelectBatch}
+							onSelectAll={handleSelectAllFromOrg}
+							onDeselectAll={handleDeselectAllFromOrg}
+							isSelected={isSelected}
+							onRefresh={handleRefreshTargetComponents}
+							isRefreshing={targetRefreshing || isProcessingTargetComponents}
+							lastUpdated={lastUpdatedTarget}
+						/>
+					</div>
 				</div>
-			</div>
+			{/if}
 		<!-- COMMENTED OUT: Unified View - Keeping only side-by-side view
 		{:else}
 			<Tabs.Root bind:value={selectedTab}>
