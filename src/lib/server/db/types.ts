@@ -22,6 +22,11 @@ export type SalesforceComponent = Database['public']['Tables']['salesforce_compo
 export type ComponentInsert = Database['public']['Tables']['salesforce_components']['Insert'];
 export type ComponentUpdate = Database['public']['Tables']['salesforce_components']['Update'];
 
+// Component notes types
+export type ComponentNote = Database['public']['Tables']['component_notes']['Row'];
+export type ComponentNoteInsert = Database['public']['Tables']['component_notes']['Insert'];
+export type ComponentNoteUpdate = Database['public']['Tables']['component_notes']['Update'];
+
 // Extended types with relations
 export interface ActiveSessionWithOrg extends ActiveSession {
 	organization?: Organization | null;
@@ -55,5 +60,16 @@ export interface ComponentResponse {
 	dependencies: any;
 	dependents: any;
 	metadata: any;
+}
+
+export interface ComponentNoteResponse {
+	id: string;
+	component_id: string;
+	content: string;
+	is_todo: boolean;
+	created_at: string;
+	updated_at: string;
+	user_email: string;
+	user_name: string | null;
 }
 

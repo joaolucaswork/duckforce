@@ -619,6 +619,14 @@
 		}
 	});
 
+	// Load notes for components already in kanban when component mounts
+	onMount(async () => {
+		const componentIds = wizardStore.state.kanbanState.columns.flatMap(col => col.componentIds);
+		if (componentIds.length > 0) {
+			await wizardStore.loadComponentNotes(componentIds);
+		}
+	});
+
 	function handleToggleComponent(componentId: string) {
 		wizardStore.toggleComponentSelection(componentId);
 	}
@@ -744,8 +752,11 @@
 						onMoveComponent={(componentId, fromColumn, toColumn) => {
 							wizardStore.moveComponentBetweenColumns(componentId, fromColumn, toColumn);
 						}}
-						onUpdateNote={(componentId, note) => {
-							wizardStore.updateComponentNote(componentId, note);
+						onUpdateNote={async (componentId, content, isTodo, archiveAndCreateNew) => {
+							await wizardStore.saveComponentNote(componentId, content, isTodo, archiveAndCreateNew);
+						}}
+						onLoadNoteHistory={async (componentId) => {
+							await wizardStore.loadComponentNoteWithHistory(componentId);
 						}}
 						onAddItems={() => {
 							addItemsModalOpen = true;
@@ -761,8 +772,9 @@
 					alreadyInKanban={new Set(
 						wizardStore.state.kanbanState.columns.flatMap(col => col.componentIds)
 					)}
-					onAddComponents={(componentIds) => {
+					onAddComponents={async (componentIds) => {
 						wizardStore.addMultipleComponentsToKanban(componentIds, 'nao-iniciado');
+						await wizardStore.loadComponentNotes(componentIds);
 					}}
 				/>
 			{:else}

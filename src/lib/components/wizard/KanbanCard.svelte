@@ -1,18 +1,19 @@
 <script lang="ts">
 	import type { SalesforceComponent } from '$lib/types/salesforce';
+	import type { ComponentNoteData } from '$lib/types/wizard';
 	import * as Card from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
-	import { GripVertical, MessageSquare } from '@lucide/svelte';
+	import { GripVertical, MessageSquare, SquareCheck } from '@lucide/svelte';
 
 	interface Props {
 		component: SalesforceComponent;
-		note: string | undefined;
+		noteData: ComponentNoteData | undefined;
 		isDragging: boolean;
 		onOpenNoteSheet: () => void;
 	}
 
-	let { component, note, isDragging, onOpenNoteSheet }: Props = $props();
+	let { component, noteData, isDragging, onOpenNoteSheet }: Props = $props();
 
 	const typeColors: Record<string, string> = {
 		ApexClass: 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
@@ -39,18 +40,25 @@
 				</h4>
 			</div>
 			<div class="flex items-center gap-1 flex-shrink-0">
-				<Button
-					variant="ghost"
-					size="icon-sm"
-					class="h-6 w-6 {note ? 'text-primary' : 'text-muted-foreground'}"
-					onclick={(e) => {
-						e.stopPropagation();
-						onOpenNoteSheet();
-					}}
-					title={note ? 'Ver/Editar Nota' : 'Adicionar Nota'}
-				>
-					<MessageSquare class="w-3.5 h-3.5" />
-				</Button>
+				<div class="relative">
+					<Button
+						variant="ghost"
+						size="icon-sm"
+						class="h-6 w-6 {noteData ? (noteData.isTodo ? 'text-accent' : 'text-primary') : 'text-muted-foreground'}"
+						onclick={(e) => {
+							e.stopPropagation();
+							onOpenNoteSheet();
+						}}
+						title={noteData ? (noteData.isTodo ? 'Ver/Editar To-Do' : 'Ver/Editar Nota') : 'Adicionar Nota'}
+					>
+						<MessageSquare class="w-3.5 h-3.5" />
+					</Button>
+					{#if noteData?.isTodo}
+						<div class="absolute -top-0.5 -right-0.5">
+							<SquareCheck class="w-2.5 h-2.5 text-accent" />
+						</div>
+					{/if}
+				</div>
 				<GripVertical class="w-4 h-4 text-muted-foreground" />
 			</div>
 		</div>

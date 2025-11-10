@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { SalesforceComponent } from '$lib/types/salesforce';
-	import type { KanbanState } from '$lib/types/wizard';
+	import type { KanbanState, ComponentNoteData } from '$lib/types/wizard';
 	import KanbanCard from './KanbanCard.svelte';
 	import NoteSheet from './NoteSheet.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -10,17 +10,20 @@
 		components: SalesforceComponent[];
 		kanbanState: KanbanState;
 		onMoveComponent: (componentId: string, fromColumn: string, toColumn: string) => void;
-		onUpdateNote: (componentId: string, note: string) => void;
+		onUpdateNote: (componentId: string, content: string, isTodo: boolean, archiveAndCreateNew: boolean) => Promise<void>;
+		onLoadNoteHistory: (componentId: string) => Promise<void>;
 		onAddItems: () => void;
 	}
 
-	let { components, kanbanState, onMoveComponent, onUpdateNote, onAddItems }: Props = $props();
+	let { components, kanbanState, onMoveComponent, onUpdateNote, onLoadNoteHistory, onAddItems }: Props = $props();
 
 	let draggedComponentId = $state<string | null>(null);
 	let draggedFromColumn = $state<string | null>(null);
 	let dragOverColumn = $state<string | null>(null);
 	let noteSheetOpen = $state(false);
 	let selectedComponentForNote = $state<string | null>(null);
+	let isSavingNote = $state(false);
+	let saveError = $state<string | null>(null);
 
 	const columnTitles = {
 		'nao-iniciado': 'Não Iniciado',
@@ -63,19 +66,42 @@
 		return components.find(c => c.id === id);
 	}
 
-	function getComponentNote(id: string): string | undefined {
+	function getComponentNote(id: string): ComponentNoteData | undefined {
 		return kanbanState.componentNotes.get(id);
+	}
+
+	function getComponentNoteHistory(id: string): ComponentNoteData[] {
+		return kanbanState.componentNoteHistory.get(id) || [];
 	}
 
 	function handleOpenNoteSheet(componentId: string) {
 		selectedComponentForNote = componentId;
 		noteSheetOpen = true;
+		saveError = null;
 	}
 
-	function handleSaveNote(note: string) {
-		if (selectedComponentForNote) {
-			onUpdateNote(selectedComponentForNote, note);
+	async function handleSaveNote(content: string, isTodo: boolean, archiveAndCreateNew: boolean) {
+		if (!selectedComponentForNote) return;
+
+		isSavingNote = true;
+		saveError = null;
+
+		try {
+			await onUpdateNote(selectedComponentForNote, content, isTodo, archiveAndCreateNew);
+			if (!archiveAndCreateNew) {
+				noteSheetOpen = false;
+			}
+		} catch (error) {
+			saveError = error instanceof Error ? error.message : 'Failed to save note';
+			console.error('Error saving note:', error);
+		} finally {
+			isSavingNote = false;
 		}
+	}
+
+	async function handleLoadHistory() {
+		if (!selectedComponentForNote) return;
+		await onLoadNoteHistory(selectedComponentForNote);
 	}
 
 	const selectedComponent = $derived(() => {
@@ -138,7 +164,7 @@
 						>
 							<KanbanCard
 								{component}
-								note={getComponentNote(componentId)}
+								noteData={getComponentNote(componentId)}
 								isDragging={draggedComponentId === componentId}
 								onOpenNoteSheet={() => handleOpenNoteSheet(componentId)}
 							/>
@@ -160,6 +186,9 @@
 	open={noteSheetOpen}
 	onOpenChange={(open) => { noteSheetOpen = open; }}
 	componentName={selectedComponent()?.name || ''}
-	note={selectedComponentForNote ? getComponentNote(selectedComponentForNote) : undefined}
+	componentId={selectedComponentForNote || ''}
+	noteData={selectedComponentForNote ? getComponentNote(selectedComponentForNote) : undefined}
+	noteHistory={selectedComponentForNote ? getComponentNoteHistory(selectedComponentForNote) : []}
 	onSaveNote={handleSaveNote}
+	onLoadHistory={handleLoadHistory}
 />

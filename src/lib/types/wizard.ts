@@ -130,9 +130,25 @@ export interface KanbanColumnData {
 	componentIds: string[];
 }
 
+export interface ComponentNoteData {
+	id: string;
+	content: string;
+	isTodo: boolean;
+	createdAt: string;
+	updatedAt: string;
+	userEmail: string;
+	userName: string | null;
+}
+
+export interface ComponentNoteWithHistory {
+	activeNote: ComponentNoteData | null;
+	history: ComponentNoteData[];
+}
+
 export interface KanbanState {
 	columns: KanbanColumnData[];
-	componentNotes: Map<string, string>;
+	componentNotes: Map<string, ComponentNoteData>;
+	componentNoteHistory: Map<string, ComponentNoteData[]>;
 }
 
 export interface WizardState {
@@ -218,7 +234,8 @@ export const initialWizardState: WizardState = {
 			{ columnId: 'em-andamento', componentIds: [] },
 			{ columnId: 'concluido', componentIds: [] }
 		],
-		componentNotes: new Map()
+		componentNotes: new Map(),
+		componentNoteHistory: new Map()
 	}
 };
 

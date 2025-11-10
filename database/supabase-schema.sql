@@ -172,3 +172,47 @@ CREATE POLICY "Users can manage their own session"
   ON active_session FOR ALL
   USING (user_id = current_user);
 
+-- ============================================================================
+-- COMPONENT_NOTES TABLE
+-- Stores user notes for components with to-do functionality and history
+-- ============================================================================
+CREATE TABLE component_notes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  component_id TEXT NOT NULL,
+  content TEXT NOT NULL,
+  is_todo BOOLEAN DEFAULT false,
+  is_archived BOOLEAN DEFAULT false,
+  archived_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes for component_notes
+CREATE INDEX idx_component_notes_user_id ON component_notes(user_id);
+CREATE INDEX idx_component_notes_component_id ON component_notes(user_id, component_id);
+CREATE INDEX idx_component_notes_is_todo ON component_notes(user_id, is_todo);
+CREATE INDEX idx_component_notes_active ON component_notes(user_id, component_id, is_archived) WHERE is_archived = false;
+CREATE INDEX idx_component_notes_history ON component_notes(user_id, component_id, created_at DESC);
+
+-- Enable RLS on component_notes
+ALTER TABLE component_notes ENABLE ROW LEVEL SECURITY;
+
+-- RLS Policies for component_notes
+CREATE POLICY "Users can view their own component notes"
+  ON component_notes FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert their own component notes"
+  ON component_notes FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own component notes"
+  ON component_notes FOR UPDATE
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own component notes"
+  ON component_notes FOR DELETE
+  USING (auth.uid() = user_id);
+

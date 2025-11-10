@@ -7,10 +7,12 @@ import type {
 	MigrationExecution,
 	CachedOrganization,
 	OrganizationSummary,
-	StandardObjectWithFields
+	StandardObjectWithFields,
+	ComponentNoteData
 } from '$lib/types/wizard';
 import type { SalesforceOrg, SalesforceComponent } from '$lib/types/salesforce';
 import { initialWizardState, WIZARD_STEPS } from '$lib/types/wizard';
+import type { ComponentNoteResponse } from '$lib/server/db/types';
 
 class WizardStore {
 	state = $state<WizardState>(structuredClone(initialWizardState));
@@ -522,12 +524,137 @@ class WizardStore {
 		this.state.kanbanState.componentNotes.delete(componentId);
 	}
 
-	updateComponentNote(componentId: string, note: string) {
-		if (note.trim() === '') {
+	updateComponentNote(componentId: string, noteData: ComponentNoteData) {
+		if (noteData.content.trim() === '') {
 			this.state.kanbanState.componentNotes.delete(componentId);
 		} else {
-			this.state.kanbanState.componentNotes.set(componentId, note);
+			this.state.kanbanState.componentNotes.set(componentId, noteData);
 		}
+	}
+
+	async loadComponentNotes(componentIds: string[]) {
+		if (componentIds.length === 0) return;
+
+		try {
+			const response = await fetch(`/api/notes?componentIds=${componentIds.join(',')}`);
+			if (!response.ok) {
+				throw new Error(`Failed to load component notes: ${response.statusText}`);
+			}
+
+			const data = await response.json();
+			const notes: ComponentNoteResponse[] = data.notes || [];
+
+			// Update the componentNotes Map with the fetched notes
+			notes.forEach(note => {
+				const noteData: ComponentNoteData = {
+					id: note.id,
+					content: note.content,
+					isTodo: note.is_todo,
+					createdAt: note.created_at,
+					updatedAt: note.updated_at,
+					userEmail: note.user_email,
+					userName: note.user_name
+				};
+				this.state.kanbanState.componentNotes.set(note.component_id, noteData);
+			});
+		} catch (error) {
+			console.error('Error loading component notes:', error);
+		}
+	}
+
+	async loadComponentNoteWithHistory(componentId: string) {
+		try {
+			const response = await fetch(`/api/notes?componentId=${componentId}&includeHistory=true`);
+			if (!response.ok) {
+				throw new Error(`Failed to load component note history: ${response.statusText}`);
+			}
+
+			const data = await response.json();
+
+			// Update active note
+			if (data.activeNote) {
+				const noteData: ComponentNoteData = {
+					id: data.activeNote.id,
+					content: data.activeNote.content,
+					isTodo: data.activeNote.is_todo,
+					createdAt: data.activeNote.created_at,
+					updatedAt: data.activeNote.updated_at,
+					userEmail: data.activeNote.user_email,
+					userName: data.activeNote.user_name
+				};
+				this.state.kanbanState.componentNotes.set(componentId, noteData);
+			} else {
+				this.state.kanbanState.componentNotes.delete(componentId);
+			}
+
+			// Update history
+			const history: ComponentNoteData[] = (data.history || []).map((note: ComponentNoteResponse) => ({
+				id: note.id,
+				content: note.content,
+				isTodo: note.is_todo,
+				createdAt: note.created_at,
+				updatedAt: note.updated_at,
+				userEmail: note.user_email,
+				userName: note.user_name
+			}));
+			this.state.kanbanState.componentNoteHistory.set(componentId, history);
+		} catch (error) {
+			console.error('Error loading component note history:', error);
+		}
+	}
+
+	async saveComponentNote(componentId: string, content: string, isTodo: boolean, archiveCurrentAndCreateNew: boolean = false): Promise<ComponentNoteData> {
+		const response = await fetch('/api/notes', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({
+				componentId,
+				content,
+				isTodo,
+				archiveCurrentAndCreateNew
+			})
+		});
+
+		if (!response.ok) {
+			throw new Error(`Failed to save component note: ${response.statusText}`);
+		}
+
+		const data = await response.json();
+		const note: ComponentNoteResponse = data.note;
+
+		// Update local state
+		const noteData: ComponentNoteData = {
+			id: note.id,
+			content: note.content,
+			isTodo: note.is_todo,
+			createdAt: note.created_at,
+			updatedAt: note.updated_at,
+			userEmail: note.user_email,
+			userName: note.user_name
+		};
+		this.state.kanbanState.componentNotes.set(componentId, noteData);
+
+		// If we archived and created new, reload history
+		if (archiveCurrentAndCreateNew) {
+			await this.loadComponentNoteWithHistory(componentId);
+		}
+
+		return noteData;
+	}
+
+	async deleteComponentNote(componentId: string) {
+		const response = await fetch(`/api/notes?componentId=${componentId}`, {
+			method: 'DELETE'
+		});
+
+		if (!response.ok) {
+			throw new Error(`Failed to delete component note: ${response.statusText}`);
+		}
+
+		// Remove from local state
+		this.state.kanbanState.componentNotes.delete(componentId);
 	}
 
 	addMultipleComponentsToKanban(componentIds: string[], columnId: string) {
@@ -541,6 +668,7 @@ class WizardStore {
 			column.componentIds = [];
 		});
 		this.state.kanbanState.componentNotes.clear();
+		this.state.kanbanState.componentNoteHistory.clear();
 	}
 
 	// Reset wizard

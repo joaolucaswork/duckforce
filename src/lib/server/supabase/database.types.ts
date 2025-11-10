@@ -163,6 +163,41 @@ export interface Database {
 					updated_at?: string;
 				};
 			};
+			component_notes: {
+				Row: {
+					id: string;
+					user_id: string;
+					component_id: string;
+					content: string;
+					is_todo: boolean;
+					is_archived: boolean;
+					archived_at: string | null;
+					created_at: string;
+					updated_at: string;
+				};
+				Insert: {
+					id?: string;
+					user_id: string;
+					component_id: string;
+					content: string;
+					is_todo?: boolean;
+					is_archived?: boolean;
+					archived_at?: string | null;
+					created_at?: string;
+					updated_at?: string;
+				};
+				Update: {
+					id?: string;
+					user_id?: string;
+					component_id?: string;
+					content?: string;
+					is_todo?: boolean;
+					is_archived?: boolean;
+					archived_at?: string | null;
+					created_at?: string;
+					updated_at?: string;
+				};
+			};
 		};
 		Views: {};
 		Functions: {};
