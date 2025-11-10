@@ -5,7 +5,7 @@
 	import * as Accordion from '$lib/components/ui/accordion';
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
-	import { Save, X, EllipsisVertical, Check, CircleAlert, Plus, Pencil, Trash2 } from '@lucide/svelte';
+	import { Save, X, EllipsisVertical, Plus, Pencil, Trash2 } from '@lucide/svelte';
 	import { formatDistanceToNow } from 'date-fns';
 	import { ptBR } from 'date-fns/locale';
 
@@ -45,6 +45,10 @@
 		localContent !== (noteData?.content || '') || localIsTodo !== (noteData?.isTodo || false)
 	);
 
+	// Track the last content that was saved to prevent auto-save on every render
+	let lastSavedContent = $state('');
+	let lastSavedIsTodo = $state(false);
+
 	// Load history when sheet opens
 	$effect(() => {
 		if (open) {
@@ -56,6 +60,8 @@
 	$effect(() => {
 		localContent = noteData?.content || '';
 		localIsTodo = noteData?.isTodo || false;
+		lastSavedContent = noteData?.content || '';
+		lastSavedIsTodo = noteData?.isTodo || false;
 		isTyping = false;
 		showThreeDotMenu = false;
 		saveStatus = 'idle';
@@ -63,8 +69,11 @@
 
 	// Auto-save effect when content changes
 	$effect(() => {
-		// Only auto-save if there are changes and we're not currently saving
-		if (hasChanges && !isSaving && localContent.trim()) {
+		// Only auto-save if content has actually changed from last saved state
+		const contentChanged = localContent !== lastSavedContent || localIsTodo !== lastSavedIsTodo;
+
+		// Only auto-save if there are actual changes and we're not currently saving
+		if (contentChanged && !isSaving && localContent.trim()) {
 			// Clear existing auto-save timeout
 			if (autoSaveTimeout) {
 				clearTimeout(autoSaveTimeout);
@@ -119,6 +128,10 @@
 			await onSaveNote(localContent, localIsTodo, false);
 			saveStatus = 'saved';
 			lastSavedAt = new Date();
+
+			// Update last saved state to prevent re-triggering auto-save
+			lastSavedContent = localContent;
+			lastSavedIsTodo = localIsTodo;
 
 			// Clear save status after 3 seconds
 			if (saveStatusTimeout) {
@@ -264,7 +277,7 @@
 		</Sheet.Header>
 
 		<!-- Note Content -->
-		<div class="flex-1 p-6 overflow-y-auto">
+		<div class="flex-1 p-6 overflow-y-auto scrollbar-custom">
 			<div class="relative">
 				<Textarea
 					bind:value={localContent}
@@ -274,6 +287,26 @@
 					placeholder="Adicione uma nota sobre este componente..."
 					class="min-h-[200px] resize-none"
 				/>
+
+				<!-- Auto-save indicator inside textarea -->
+				{#if saveStatus !== 'idle'}
+					<div class="absolute bottom-0 right-0 left-0 pointer-events-none select-none" style="background: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.85) 100%); padding: 24px 8px 8px 8px; border-radius: 0 0 var(--radius) var(--radius);">
+						<div class="text-right" style="font-size: 14px;">
+							{#if saveStatus === 'saving'}
+								<span class="text-white">Salvando...</span>
+							{:else if saveStatus === 'saved'}
+								<span class="text-white">
+									Salvo
+									{#if lastSavedAt}
+										às {formatSaveTime(lastSavedAt)}
+									{/if}
+								</span>
+							{:else if saveStatus === 'error'}
+								<span class="text-red-300">Erro ao salvar</span>
+							{/if}
+						</div>
+					</div>
+				{/if}
 
 				<!-- Three-dot menu button -->
 				{#if showThreeDotMenu && !isTyping && localContent.trim()}
@@ -297,33 +330,6 @@
 					</div>
 				{/if}
 			</div>
-
-			<!-- Save Status Indicator -->
-			{#if saveStatus !== 'idle'}
-				<div class="mt-2 flex items-center gap-2 text-sm transition-opacity duration-300">
-					{#if saveStatus === 'saving'}
-						<div class="flex items-center gap-2 text-muted-foreground">
-							<div class="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent"></div>
-							<span>Salvando...</span>
-						</div>
-					{:else if saveStatus === 'saved'}
-						<div class="flex items-center gap-2 text-green-600 dark:text-green-500">
-							<Check class="h-4 w-4" />
-							<span>
-								Salvo
-								{#if lastSavedAt}
-									às {formatSaveTime(lastSavedAt)}
-								{/if}
-							</span>
-						</div>
-					{:else if saveStatus === 'error'}
-						<div class="flex items-center gap-2 text-destructive">
-							<CircleAlert class="h-4 w-4" />
-							<span>Erro ao salvar</span>
-						</div>
-					{/if}
-				</div>
-			{/if}
 
 			<!-- Archived Notes (Collapsible Accordion) -->
 			{#if noteHistory.length > 0}
