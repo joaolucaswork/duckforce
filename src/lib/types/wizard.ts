@@ -102,8 +102,15 @@ export interface ComponentSelection {
 	error: string | null;
 }
 
+export interface StandardObjectWithFields {
+	objectName: string;
+	customFields: SalesforceComponent[];
+}
+
 export interface DependencyReview {
-	discoveredDependencies: SalesforceComponent[];
+	discoveredDependencies: SalesforceComponent[]; // DEPRECATED: Use customDependencies instead
+	customDependencies: SalesforceComponent[]; // Custom components (custom objects, custom fields on custom objects, etc.)
+	standardObjectsWithFields: StandardObjectWithFields[]; // Standard objects with custom fields
 	isScanning: boolean;
 	scanComplete: boolean;
 	error: string | null;
@@ -179,7 +186,9 @@ export const initialWizardState: WizardState = {
 		error: null
 	},
 	dependencyReview: {
-		discoveredDependencies: [],
+		discoveredDependencies: [], // DEPRECATED: Use customDependencies instead
+		customDependencies: [],
+		standardObjectsWithFields: [],
 		isScanning: false,
 		scanComplete: false,
 		error: null

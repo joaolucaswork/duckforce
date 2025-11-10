@@ -56,55 +56,17 @@
 	let detailsModalOpen = $state(false); // Track modal open state
 	let selectedComponentForDetails = $state<SalesforceComponent | null>(null); // Track selected component for details modal
 
-	// Auto-select components that exist in both orgs when components change
-	// CRITICAL FIX: Process auto-selection in chunks to prevent UI blocking
+	// Track components that exist in both orgs for visual indication only
+	// CRITICAL FIX: Do NOT auto-select these components - only track them for UI display
+	// BOTH panels: Show components that exist in both orgs as checked/disabled
 	$effect(() => {
-		const existsInBothComponents = components.filter(c => c.existsInBoth);
+		// Filter to only custom components that exist in both orgs
+		const existsInBothComponents = components.filter(c => c.existsInBoth && isCustomComponent(c));
 		const newAutoSelectedIds = new Set(existsInBothComponents.map(c => c.id));
 
-		// Store the new auto-selected IDs immediately for UI consistency
+		// Store the IDs for visual indication only (checked/disabled checkboxes)
+		// DO NOT add them to the actual selectedIds Set
 		autoSelectedIds = newAutoSelectedIds;
-
-		// Defer auto-selection with chunking for better performance
-		setTimeout(() => {
-			// Batch collect IDs that need to be selected
-			const idsToSelect: string[] = [];
-
-			existsInBothComponents.forEach(component => {
-				if (!isSelected(component.id)) {
-					idsToSelect.push(component.id);
-				}
-			});
-
-			// Process selection in chunks to prevent blocking
-			if (idsToSelect.length > 0) {
-				const CHUNK_SIZE = 100;
-				let currentIndex = 0;
-
-				function selectChunk() {
-					const chunk = idsToSelect.slice(currentIndex, currentIndex + CHUNK_SIZE);
-					
-					if (chunk.length > 0) {
-						if (onSelectBatch) {
-							// Use batch selection for better performance
-							onSelectBatch(chunk);
-						} else {
-							// Fallback to individual selection
-							chunk.forEach(id => onToggleComponent(id));
-						}
-					}
-
-					currentIndex += CHUNK_SIZE;
-
-					// Continue if there are more to select
-					if (currentIndex < idsToSelect.length) {
-						setTimeout(selectChunk, 0);
-					}
-				}
-
-				selectChunk();
-			}
-		}, 200); // Increased delay to ensure UI renders first
 	});
 
 
@@ -715,7 +677,8 @@
 											<div class="group w-full flex items-start gap-2 p-2.5 border-b transition-colors {isSelected(component.id) ? 'bg-accent/30' : ''}" style="padding-left: 2.5rem; padding-right: 1rem;">
 												<button
 													onclick={() => {
-														// Prevent deselection of auto-selected components
+														// Components that exist in both orgs cannot be toggled
+														// They are shown as checked/disabled for visual indication only
 														if (!autoSelectedIds.has(component.id)) {
 															onToggleComponent(component.id);
 														}
@@ -726,7 +689,7 @@
 													disabled={autoSelectedIds.has(component.id)}
 												>
 													<Checkbox
-														checked={isSelected(component.id)}
+														checked={autoSelectedIds.has(component.id) || isSelected(component.id)}
 														disabled={autoSelectedIds.has(component.id)}
 														class={autoSelectedIds.has(component.id) ? 'opacity-60' : ''}
 													/>
@@ -792,7 +755,8 @@
 															<div class="group w-full flex items-start gap-2 p-2 border-b border-dashed transition-colors {isSelected(field.id) ? 'bg-accent/20' : ''}">
 																<button
 																	onclick={() => {
-																		// Prevent deselection of auto-selected components
+																		// Components that exist in both orgs cannot be toggled
+																		// They are shown as checked/disabled for visual indication only
 																		if (!autoSelectedIds.has(field.id)) {
 																			onToggleComponent(field.id);
 																		}
@@ -803,7 +767,7 @@
 																	disabled={autoSelectedIds.has(field.id)}
 																>
 																	<Checkbox
-																		checked={isSelected(field.id)}
+																		checked={autoSelectedIds.has(field.id) || isSelected(field.id)}
 																		disabled={autoSelectedIds.has(field.id)}
 																		class={autoSelectedIds.has(field.id) ? 'opacity-60' : ''}
 																	/>
@@ -888,7 +852,8 @@
 
 								<button
 									onclick={() => {
-										// Prevent deselection of auto-selected components
+										// Components that exist in both orgs cannot be toggled
+										// They are shown as checked/disabled for visual indication only
 										if (!autoSelectedIds.has(component.id)) {
 											onToggleComponent(component.id);
 										}
@@ -899,7 +864,7 @@
 									disabled={autoSelectedIds.has(component.id)}
 								>
 									<Checkbox
-										checked={isSelected(component.id)}
+										checked={autoSelectedIds.has(component.id) || isSelected(component.id)}
 										disabled={autoSelectedIds.has(component.id)}
 										class={autoSelectedIds.has(component.id) ? 'opacity-60' : ''}
 									/>
@@ -965,7 +930,8 @@
 											<div class="group w-full flex items-start gap-2 p-2 border-b border-dashed transition-colors {isSelected(field.id) ? 'bg-accent/20' : ''}">
 												<button
 													onclick={() => {
-														// Prevent deselection of auto-selected components
+														// Components that exist in both orgs cannot be toggled
+														// They are shown as checked/disabled for visual indication only
 														if (!autoSelectedIds.has(field.id)) {
 															onToggleComponent(field.id);
 														}
@@ -976,7 +942,7 @@
 													disabled={autoSelectedIds.has(field.id)}
 												>
 													<Checkbox
-														checked={isSelected(field.id)}
+														checked={autoSelectedIds.has(field.id) || isSelected(field.id)}
 														disabled={autoSelectedIds.has(field.id)}
 														class={autoSelectedIds.has(field.id) ? 'opacity-60' : ''}
 													/>

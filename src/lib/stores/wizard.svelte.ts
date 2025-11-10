@@ -6,7 +6,8 @@ import type {
 	DependencyReview,
 	MigrationExecution,
 	CachedOrganization,
-	OrganizationSummary
+	OrganizationSummary,
+	StandardObjectWithFields
 } from '$lib/types/wizard';
 import type { SalesforceOrg, SalesforceComponent } from '$lib/types/salesforce';
 import { initialWizardState, WIZARD_STEPS } from '$lib/types/wizard';
@@ -417,7 +418,24 @@ class WizardStore {
 	}
 
 	setDiscoveredDependencies(dependencies: SalesforceComponent[]) {
+		// DEPRECATED: Use setCategorizedDependencies instead
 		this.state.dependencyReview.discoveredDependencies = dependencies;
+		this.state.dependencyReview.isScanning = false;
+		this.state.dependencyReview.scanComplete = true;
+		this.markStepComplete('review-dependencies');
+	}
+
+	setCategorizedDependencies(
+		customDependencies: SalesforceComponent[],
+		standardObjectsWithFields: StandardObjectWithFields[]
+	) {
+		this.state.dependencyReview.customDependencies = customDependencies;
+		this.state.dependencyReview.standardObjectsWithFields = standardObjectsWithFields;
+		// Also set discoveredDependencies for backward compatibility
+		this.state.dependencyReview.discoveredDependencies = [
+			...customDependencies,
+			...standardObjectsWithFields.flatMap(obj => obj.customFields)
+		];
 		this.state.dependencyReview.isScanning = false;
 		this.state.dependencyReview.scanComplete = true;
 		this.markStepComplete('review-dependencies');

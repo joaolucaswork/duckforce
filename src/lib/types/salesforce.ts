@@ -11,6 +11,18 @@ export interface Dependency {
 	required: boolean;
 }
 
+export interface LWCUsageLocation {
+	id: string;
+	name: string;
+	type: 'FlexiPage' | 'Flow' | 'QuickAction' | 'CustomApplication' | 'Other';
+	subType?: string; // e.g., 'AppPage', 'RecordPage', 'HomePage' for FlexiPage
+}
+
+export interface LWCUsageMetadata {
+	locations: LWCUsageLocation[];
+	totalUsageCount: number;
+}
+
 export interface SalesforceComponent {
 	id: string;
 	name: string;
@@ -29,6 +41,8 @@ export interface SalesforceComponent {
 	sourceOrgName?: string;
 	// NEW: Track if component exists in both source and target orgs
 	existsInBoth?: boolean;
+	// NEW: Track where LWC components are used (only for type='lwc')
+	usageMetadata?: LWCUsageMetadata;
 }
 
 // Lightning Web Component

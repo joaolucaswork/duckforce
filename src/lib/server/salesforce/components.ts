@@ -7,6 +7,7 @@
 
 import { Connection } from '@jsforce/jsforce-node';
 import type { ComponentInsert } from '../db/types';
+import type { LWCUsageMetadata, LWCUsageLocation } from '$lib/types/salesforce';
 
 /**
  * Fetch all Lightning Web Components from a Salesforce org
@@ -410,6 +411,109 @@ export async function fetchAllComponents(conn: Connection): Promise<ComponentIns
 	} catch (error) {
 		console.error('[Salesforce] Error fetching all components:', error);
 		throw error;
+	}
+}
+
+/**
+ * Fetch usage metadata for Lightning Web Components
+ *
+ * Queries the MetadataComponentDependency table to find where LWCs are used
+ * (FlexiPages, Flows, QuickActions, etc.)
+ *
+ * @param conn - JSforce connection with valid access token
+ * @param lwcComponentIds - Array of LWC component IDs to fetch usage for
+ * @returns Map of component ID to usage metadata
+ */
+export async function fetchLWCUsageMetadata(
+	conn: Connection,
+	lwcComponentIds: string[]
+): Promise<Map<string, LWCUsageMetadata>> {
+	try {
+		if (lwcComponentIds.length === 0) {
+			return new Map();
+		}
+
+		console.log(`[Salesforce] Fetching usage metadata for ${lwcComponentIds.length} LWC components...`);
+
+		// Query MetadataComponentDependency to find where LWCs are used
+		// RefMetadataComponentId is the LWC component ID
+		// MetadataComponentId is the parent component (FlexiPage, Flow, etc.)
+		const idList = lwcComponentIds.map(id => `'${id}'`).join(',');
+		const query = `
+			SELECT MetadataComponentId,
+			       MetadataComponentName,
+			       MetadataComponentType,
+			       RefMetadataComponentId,
+			       RefMetadataComponentName,
+			       RefMetadataComponentType
+			FROM MetadataComponentDependency
+			WHERE RefMetadataComponentType = 'LightningComponentBundle'
+			  AND RefMetadataComponentId IN (${idList})
+		`;
+
+		const result = await conn.tooling.query(query);
+
+		console.log(`[Salesforce] Found ${result.records.length} usage references`);
+
+		// Group usage locations by LWC component ID
+		const usageMap = new Map<string, LWCUsageLocation[]>();
+
+		result.records.forEach((record: any) => {
+			const lwcId = record.RefMetadataComponentId;
+
+			if (!usageMap.has(lwcId)) {
+				usageMap.set(lwcId, []);
+			}
+
+			// Determine the type and subType based on MetadataComponentType
+			let locationType: LWCUsageLocation['type'] = 'Other';
+			let subType: string | undefined;
+
+			switch (record.MetadataComponentType) {
+				case 'FlexiPage':
+					locationType = 'FlexiPage';
+					// Try to determine subType from metadata if available
+					// This would require additional queries, so we'll leave it undefined for now
+					break;
+				case 'Flow':
+					locationType = 'Flow';
+					break;
+				case 'QuickAction':
+					locationType = 'QuickAction';
+					break;
+				case 'CustomApplication':
+					locationType = 'CustomApplication';
+					break;
+				default:
+					locationType = 'Other';
+			}
+
+			usageMap.get(lwcId)!.push({
+				id: record.MetadataComponentId,
+				name: record.MetadataComponentName,
+				type: locationType,
+				subType
+			});
+		});
+
+		// Convert to final format with usage metadata
+		const metadataMap = new Map<string, LWCUsageMetadata>();
+
+		usageMap.forEach((locations, lwcId) => {
+			metadataMap.set(lwcId, {
+				locations,
+				totalUsageCount: locations.length
+			});
+		});
+
+		console.log(`[Salesforce] Processed usage metadata for ${metadataMap.size} LWC components`);
+
+		return metadataMap;
+	} catch (error) {
+		console.error('[Salesforce] Error fetching LWC usage metadata:', error);
+		// Don't throw - return empty map to allow dependency analysis to continue
+		console.warn('[Salesforce] Continuing without usage metadata');
+		return new Map();
 	}
 }
 
